@@ -23,7 +23,11 @@ This solution supports faster and more accessible rice quality grading in real-w
 
 ## 🔗 GitHub Repository
 
+https://github.com/Davdesigner/Mission_capstone.git
 
+## Video demo
+
+https://drive.google.com/file/d/1w-XUjHkWJbogdZeI79E8lTJgOZxZYFOE/view?usp=sharing
 ---
 
 # ⚙️ Environment Setup
