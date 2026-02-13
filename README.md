@@ -30,8 +30,8 @@ This solution supports faster and more accessible rice quality grading in real-w
 
 ## 1️⃣ Clone the Repository
 ```bash
-git clone https://github.com/your-username/ricevision.git
-cd ricevision
+git clone [https://github.com/your-username/ricevision.git](https://github.com/Davdesigner/Mission_capstone.git)
+cd Mission capstone
 ```
 ## 2️⃣ Create Virtual Environment
 ```bash
