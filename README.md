@@ -19,7 +19,7 @@ The project combines:
 
 This solution supports faster and more accessible rice quality grading in real-world environments.
 
----
+
 
 ## 🔗 GitHub Repository
 
@@ -29,7 +29,7 @@ https://github.com/Davdesigner/Mission_capstone.git
 
 https://drive.google.com/file/d/1w-XUjHkWJbogdZeI79E8lTJgOZxZYFOE/view?usp=sharing
 
----
+
 
 # ⚙️ Environment Setup
 
