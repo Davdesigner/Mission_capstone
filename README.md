@@ -1,20 +1,83 @@
-# 🌾 AminoRice – AI-Based Rice Quality Assessment System
-##📌 Description
+# 🌾 AminoRice – Mobile AI Rice Quality Assessment
 
-RiceVision is an AI-powered computer vision system designed to automatically assess rice quality indicators from grain images. The system uses deep learning techniques to predict key quality metrics such as grain count, broken grains, chalky grains, and dimensional characteristics.
+## 📌 Description
+AminoRice is a mobile-integrated AI computer vision system that evaluates rice grain quality from images.  
+The model analyzes a captured rice sample and predicts quality indicators such as:
 
-This project was developed as part of a Mission Capstone focused on leveraging Artificial Intelligence to enhance agro-industrial value chains, particularly within African rice markets.
+- Total grains
+- Broken grains
+- Chalky grains
+- Grain dimensions
 
-## The solution combines:
+The goal is to provide farmers, millers, and inspectors with a portable quality-inspection tool using a smartphone camera instead of laboratory equipment.
 
-Image preprocessing and augmentation
+The project combines:
+- Deep learning image regression
+- Data preprocessing & augmentation
+- Model inference API
+- Mobile application integration
 
-Convolutional Neural Network (CNN) modeling
+This solution supports faster and more accessible rice quality grading in real-world environments.
 
-Multi-output regression for rice quality metrics
+---
 
-API-ready deployment structure
+## 🔗 GitHub Repository
 
-Mobile application interface mockup
 
-The objective is to provide a scalable, field-ready digital solution for farmers, processors, and quality inspectors.
+---
+
+# ⚙️ Environment Setup
+
+## 1️⃣ Clone the Repository
+```bash
+git clone https://github.com/your-username/ricevision.git
+cd ricevision
+```
+## 2️⃣ Create Virtual Environment
+```bash
+python -m venv venv
+```
+### Activate:
+
+Windows:
+```bash
+venv\Scripts\activate
+```
+Mac/Linux:
+```bash
+source venv/bin/activate
+```
+## Install all dependencies
+```bash
+pip install -r requirements.txt
+```
+## 4️⃣ Dataset Setup
+
+Place the dataset inside:
+```
+project-root/
+│
+├── data/
+│   ├── train.csv
+│   └── images/
+```
+Update paths inside the notebook or script:
+```
+DATASET_PATH = "data/train.csv"
+IMG_DIR = "data/images"
+```
+## 5️⃣ Run Model Notebook
+Open in VS Code or Jupyter:
+```
+jupyter notebook
+```
+Run: 
+```
+David_Mission_Capstone.ipynb
+```
+# 🖼 Designs Deployment
+## Figma 
+Figma Design Link: https://www.figma.com/design/jeT4IBYbf2ajMnx0zNKLIo/AminoRice?node-id=0-1&t=sO9ItIcCcm1ehnLM-1 
+<img width="450" height="913" alt="Screenshot 2026-02-13 135541" src="https://github.com/user-attachments/assets/826aa459-b235-4f60-b0fd-bd314072217a" />
+<img width="442" height="908" alt="image" src="https://github.com/user-attachments/assets/cd8061ab-e615-4a92-a30a-aa89a5ededc0" />
+
