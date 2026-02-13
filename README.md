@@ -81,3 +81,11 @@ Figma Design Link: https://www.figma.com/design/jeT4IBYbf2ajMnx0zNKLIo/AminoRice
 <img width="450" height="913" alt="Screenshot 2026-02-13 135541" src="https://github.com/user-attachments/assets/826aa459-b235-4f60-b0fd-bd314072217a" />
 <img width="442" height="908" alt="image" src="https://github.com/user-attachments/assets/cd8061ab-e615-4a92-a30a-aa89a5ededc0" />
 
+## 🧩 System Architecture Diagram
+Includes:
+- Mobile App
+- Preprocessing Engine
+- CNN Model
+- Prediction Layer
+- API Gateway
+- Results Visualization
