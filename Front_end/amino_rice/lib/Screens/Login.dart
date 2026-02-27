@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'main_navbar.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -209,10 +210,8 @@ class _LoginPageState extends State<LoginPage> {
                                   onPressed: _isLoading
                                       ? null
                                       : () {
-                                          if (_formKey.currentState!
-                                              .validate()) {
-                                            _performLogin();
-                                          }
+                                          // Skip validation for now, just login
+                                          _performLogin();
                                         },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFF2E7D32),
@@ -248,8 +247,6 @@ class _LoginPageState extends State<LoginPage> {
                                         ),
                                 ),
                               ),
-
-
                             ],
                           ),
                         ),
@@ -289,27 +286,18 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     // Simulate login process
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 1));
 
     if (mounted) {
       setState(() {
         _isLoading = false;
       });
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Login successful!'),
-          backgroundColor: Color(0xFF2E7D32),
-          duration: Duration(seconds: 2),
-        ),
+      // Navigate to home (with bottom nav bar)
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainNavBar()),
       );
-
-      // Here you can add navigation to your next page
-      // Navigator.pushReplacement(
-      //   context,
-      //   MaterialPageRoute(builder: (context) => const YourNextPage()),
-      // );
     }
   }
 
