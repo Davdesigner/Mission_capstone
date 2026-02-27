@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'chatbot.dart';
+import 'homepage.dart';
 
 class MainNavBar extends StatefulWidget {
   const MainNavBar({super.key});
@@ -100,7 +101,7 @@ class _MainNavBarState extends State<MainNavBar> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   // Left side - Predict
-                  _navItem(Icons.analytics_outlined, "Predict", 0),
+                  _navItem(Icons.analytics_outlined, "Scan", 0),
 
                   const SizedBox(width: 80), // Space for center home button
                   // Right side - History
@@ -152,43 +153,6 @@ class _MainNavBarState extends State<MainNavBar> {
 }
 
 // Placeholder Screens
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Home'),
-        backgroundColor: const Color(0xFF2E7D32),
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.home, size: 100, color: const Color(0xFF2E7D32)),
-            const SizedBox(height: 20),
-            const Text(
-              'Welcome to AminoRice!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2E7D32),
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Your rice quality assurance assistant',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
 
