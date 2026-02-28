@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'chatbot.dart';
 import 'homepage.dart';
 import 'scanning.dart';
+import 'history.dart';
 
 class MainNavBar extends StatefulWidget {
   const MainNavBar({super.key});
@@ -17,7 +18,7 @@ class _MainNavBarState extends State<MainNavBar> {
   final List<Widget> _screens = [
     const RecordPage(),
     const HomeScreen(),
-    const HistoryScreen(),
+    const HistoryPage(),
   ];
 
   void _onItemTapped(int index) {
