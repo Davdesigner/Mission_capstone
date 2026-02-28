@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'chatbot.dart';
 import 'homepage.dart';
+import 'scanning.dart';
 
 class MainNavBar extends StatefulWidget {
   const MainNavBar({super.key});
@@ -14,7 +15,7 @@ class _MainNavBarState extends State<MainNavBar> {
 
   // List of screens for each navigation item
   final List<Widget> _screens = [
-    const PredictScreen(),
+    const RecordPage(),
     const HomeScreen(),
     const HistoryScreen(),
   ];
