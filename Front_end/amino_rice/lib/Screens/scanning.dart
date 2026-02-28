@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class RecordPage extends StatefulWidget {
   const RecordPage({super.key});
@@ -435,8 +436,59 @@ class _RecordPageState extends State<RecordPage> {
   }
 
   // Image Picker Methods
+  Future<bool> _requestPermissions(ImageSource source) async {
+    if (source == ImageSource.camera) {
+      final status = await Permission.camera.request();
+      return status.isGranted;
+    } else {
+      // For Android 13+ (API 33+)
+      if (await Permission.photos.isGranted ||
+          await Permission.storage.isGranted) {
+        return true;
+      }
+
+      final photoStatus = await Permission.photos.request();
+      if (photoStatus.isGranted) return true;
+
+      final storageStatus = await Permission.storage.request();
+      return storageStatus.isGranted;
+    }
+  }
+
   Future<void> _pickImage(ImageSource source) async {
     try {
+      // Request permissions first
+      final hasPermission = await _requestPermissions(source);
+
+      if (!hasPermission) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.warning, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    source == ImageSource.camera
+                        ? 'Camera permission denied. Please enable it in settings.'
+                        : 'Storage permission denied. Please enable it in settings.',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'Settings',
+              textColor: Colors.white,
+              onPressed: () => openAppSettings(),
+            ),
+          ),
+        );
+        return;
+      }
+
       final XFile? pickedFile = await _imagePicker.pickImage(
         source: source,
         imageQuality: 85,
