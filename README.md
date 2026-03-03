@@ -1,6 +1,6 @@
-# 🌾 AminoRice – Mobile AI Rice Quality Assessment
+# AminoRice – Mobile AI Rice Quality Assessment
 
-## 📌 Description
+## Description
 AminoRice is a mobile-integrated AI computer vision system that evaluates rice grain quality from images.  
 The model analyzes a captured rice sample and predicts quality indicators such as:
 
