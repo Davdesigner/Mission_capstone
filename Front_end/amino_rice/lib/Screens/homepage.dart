@@ -3,6 +3,7 @@ import 'Login.dart';
 import 'scanning.dart';
 import 'history.dart';
 import 'chatbot.dart';
+import 'profile.dart';
 
 /// Home screen for AminoRice - Rice Quality Assurance Application
 class HomeScreen extends StatefulWidget {
@@ -41,7 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.person_outline),
             onPressed: () {
-              // TODO: Navigate to profile
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ProfilePage()),
+              );
             },
           ),
         ],
@@ -446,10 +450,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: 'Profile',
                     onTap: () {
                       Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Profile page coming soon!'),
-                          duration: Duration(seconds: 2),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ProfilePage(),
                         ),
                       );
                     },

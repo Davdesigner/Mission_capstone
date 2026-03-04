@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'main_navbar.dart';
+import 'register.dart';
+import '../main.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -52,7 +54,14 @@ class _LoginPageState extends State<LoginPage> {
                                 color: Colors.white,
                                 size: 28,
                               ),
-                              onPressed: () => Navigator.pop(context),
+                              onPressed: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const HomePage(),
+                                  ),
+                                );
+                              },
                             ),
                           ),
                           const SizedBox(height: 5),
@@ -247,6 +256,41 @@ class _LoginPageState extends State<LoginPage> {
                                         ),
                                 ),
                               ),
+
+                              const SizedBox(height: 20),
+
+                              // Don't have an account link
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    "Don't have an account? ",
+                                    style: TextStyle(
+                                      color: Colors.grey[600],
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) =>
+                                              const RegisterPage(),
+                                        ),
+                                      );
+                                    },
+                                    child: const Text(
+                                      'Create account',
+                                      style: TextStyle(
+                                        color: Color(0xFF2E7D32),
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -258,7 +302,7 @@ class _LoginPageState extends State<LoginPage> {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 7.0),
                           child: Text(
-                            'Copyright ©2025',
+                            'Copyright ©2026',
                             style: TextStyle(
                               fontSize: 14,
                               color: Colors.grey[500],

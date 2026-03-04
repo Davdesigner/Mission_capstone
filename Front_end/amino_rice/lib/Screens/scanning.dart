@@ -7,6 +7,7 @@ import 'main_navbar.dart';
 import 'homepage.dart';
 import 'history.dart';
 import 'chatbot.dart';
+import 'profile.dart';
 
 class RecordPage extends StatefulWidget {
   const RecordPage({super.key});
@@ -774,11 +775,10 @@ class _RecordPageState extends State<RecordPage> {
                     title: 'Profile',
                     onTap: () {
                       Navigator.of(context).pop();
-                      // Navigate to profile if available
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Profile page coming soon!'),
-                          duration: Duration(seconds: 2),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ProfilePage(),
                         ),
                       );
                     },

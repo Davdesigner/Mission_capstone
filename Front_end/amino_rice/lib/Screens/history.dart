@@ -3,6 +3,7 @@ import 'main_navbar.dart';
 import 'chatbot.dart';
 import 'Login.dart';
 import 'scanning.dart';
+import 'profile.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -585,10 +586,10 @@ class _HistoryPageState extends State<HistoryPage> {
                     title: 'Profile',
                     onTap: () {
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Profile page coming soon!'),
-                          duration: Duration(seconds: 2),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ProfilePage(),
                         ),
                       );
                     },

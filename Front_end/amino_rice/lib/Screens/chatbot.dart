@@ -4,6 +4,7 @@ import 'Login.dart';
 import 'scanning.dart';
 import 'history.dart';
 import 'homepage.dart';
+import 'profile.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -502,10 +503,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                     title: 'Profile',
                     onTap: () {
                       Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Profile page coming soon!'),
-                          duration: Duration(seconds: 2),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ProfilePage(),
                         ),
                       );
                     },
