@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'main_navbar.dart';
 import 'chatbot.dart';
 import 'Login.dart';
+import 'scanning.dart';
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -550,10 +551,10 @@ class _HistoryPageState extends State<HistoryPage> {
                     title: 'Scan',
                     onTap: () {
                       Navigator.pop(context);
-                      Navigator.pushReplacement(
+                      Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const MainNavBar(),
+                          builder: (context) => const RecordPage(),
                         ),
                       );
                     },

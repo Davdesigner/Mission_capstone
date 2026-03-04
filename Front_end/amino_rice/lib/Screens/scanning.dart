@@ -2,6 +2,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'Login.dart';
+import 'main_navbar.dart';
+import 'homepage.dart';
+import 'history.dart';
+import 'chatbot.dart';
 
 class RecordPage extends StatefulWidget {
   const RecordPage({super.key});
@@ -722,7 +727,12 @@ class _RecordPageState extends State<RecordPage> {
                     title: 'Home',
                     onTap: () {
                       Navigator.of(context).pop();
-                      // Navigate to home if needed
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const MainNavBar(),
+                        ),
+                      );
                     },
                   ),
                   _buildMenuItem(
@@ -738,11 +748,10 @@ class _RecordPageState extends State<RecordPage> {
                     title: 'History',
                     onTap: () {
                       Navigator.of(context).pop();
-                      // Navigate to history if available
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('History page coming soon!'),
-                          duration: Duration(seconds: 2),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const HistoryPage(),
                         ),
                       );
                     },
@@ -752,11 +761,10 @@ class _RecordPageState extends State<RecordPage> {
                     title: 'Chat',
                     onTap: () {
                       Navigator.of(context).pop();
-                      // Navigate to chat if available
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Chat page coming soon!'),
-                          duration: Duration(seconds: 2),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ChatbotScreen(),
                         ),
                       );
                     },
@@ -847,14 +855,10 @@ class _RecordPageState extends State<RecordPage> {
             ElevatedButton(
               onPressed: () {
                 Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Logged out successfully'),
-                    backgroundColor: Colors.green,
-                    duration: Duration(seconds: 2),
-                  ),
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const LoginPage()),
+                  (route) => false,
                 );
-                // Add your logout navigation here
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
