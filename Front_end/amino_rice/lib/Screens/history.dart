@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'main_navbar.dart';
+import '../widgets/main_navbar.dart';
 import 'chatbot.dart';
-import 'Login.dart';
+import 'login.dart';
 import 'scanning.dart';
 import 'profile.dart';
 

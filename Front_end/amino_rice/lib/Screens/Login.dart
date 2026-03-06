@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'main_navbar.dart';
+import '../widgets/main_navbar.dart';
 import 'register.dart';
 import '../main.dart';
 

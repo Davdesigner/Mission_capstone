@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'chatbot.dart';
-import 'homepage.dart';
-import 'scanning.dart';
-import 'history.dart';
+import '../screens/chatbot.dart';
+import '../screens/homepage.dart';
+import '../screens/scanning.dart';
+import '../screens/history.dart';
 
 class MainNavBar extends StatefulWidget {
   const MainNavBar({super.key});

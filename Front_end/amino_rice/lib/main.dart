@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
-import 'Screens/Login.dart';
+import 'screens/login.dart';
 
 void main() {
   runApp(const MyApp());
@@ -59,7 +59,7 @@ class HomePage extends StatelessWidget {
 
                 // Farmer Animation
                 Lottie.asset(
-                  'Assets/farmer.json',
+                  'assets/farmer.json',
                   width: 200,
                   height: 200,
                   fit: BoxFit.contain,
@@ -91,7 +91,7 @@ class HomePage extends StatelessWidget {
 
                 // Farmer Logistics Animation
                 Lottie.asset(
-                  'Assets/Farmer_Logistics.json',
+                  'assets/Farmer_Logistics.json',
                   width: 200,
                   height: 200,
                   fit: BoxFit.contain,

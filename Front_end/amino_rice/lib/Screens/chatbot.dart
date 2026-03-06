@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'main_navbar.dart';
-import 'Login.dart';
+import '../widgets/main_navbar.dart';
+import 'login.dart';
 import 'scanning.dart';
 import 'history.dart';
-import 'homepage.dart';
 import 'profile.dart';
 
 class ChatbotScreen extends StatefulWidget {
