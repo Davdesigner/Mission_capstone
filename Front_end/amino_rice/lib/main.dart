@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 import 'screens/login.dart';
+import 'services/storage_service.dart';
+import 'services/api_service.dart';
+import 'widgets/main_navbar.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await StorageService().init();
   runApp(const MyApp());
 }
 
@@ -27,11 +32,63 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
   @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  bool _isChecking = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLoginStatus();
+  }
+
+  Future<void> _checkLoginStatus() async {
+    try {
+      final isLoggedIn = await StorageService().isLoggedIn();
+      if (isLoggedIn) {
+        final token = await StorageService().getAuthToken();
+        if (token != null) {
+          // Set token in API service
+          ApiService().setAuthToken(token);
+
+          // Navigate to main app
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const MainNavBar()),
+            );
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error checking login status: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _isChecking = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isChecking) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(

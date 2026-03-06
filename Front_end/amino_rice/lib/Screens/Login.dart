@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/main_navbar.dart';
+import '../services/api_service.dart';
+import '../services/storage_service.dart';
 import 'register.dart';
 import '../main.dart';
 
@@ -325,23 +327,74 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _performLogin() async {
+    // Validate form
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
-    // Simulate login process
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      // Call API to login
+      final result = await ApiService().login(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
 
-    if (mounted) {
+      if (result != null && mounted) {
+        // Save auth token
+        await StorageService().saveAuthToken(result['access_token']);
+        await StorageService().setLoggedIn(true);
+
+        // Get user profile
+        final user = await ApiService().getProfile();
+        if (user != null) {
+          await StorageService().saveUserData({
+            'id': user.id,
+            'fullName': user.fullName,
+            'email': user.email,
+            'phone': user.phone,
+            'joinDate': user.joinDate?.toIso8601String(),
+          });
+        }
+
+        setState(() {
+          _isLoading = false;
+        });
+
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Login successful!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+
+          // Navigate to home (with bottom nav bar)
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const MainNavBar()),
+          );
+        }
+      }
+    } catch (e) {
       setState(() {
         _isLoading = false;
       });
 
-      // Navigate to home (with bottom nav bar)
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const MainNavBar()),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 

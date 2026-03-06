@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../services/storage_service.dart';
+import '../services/api_service.dart';
+import '../models/user.dart';
 import 'login.dart';
 
 class ProfilePage extends StatefulWidget {
@@ -9,121 +12,269 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  // Mock user data - In a real app, this would come from authentication/database
-  final String userName = "John Doe";
-  final String userEmail = "john.doe@example.com";
-  final String userPhone = "+1 234 567 8900";
-  final String joinDate = "January 2026";
+  // Real user data from database
+  String userName = "";
+  String userEmail = "";
+  String userPhone = "";
+  String joinDate = "";
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      // First try to get user data from local storage
+      final userData = await StorageService().getUserData();
+
+      if (userData != null) {
+        setState(() {
+          userName = userData['full_name'] ?? 'N/A';
+          userEmail = userData['email'] ?? 'N/A';
+          userPhone = userData['phone'] ?? 'Not provided';
+
+          // Format join date if available
+          if (userData['join_date'] != null) {
+            try {
+              final date = DateTime.parse(userData['join_date']);
+              final months = [
+                'January',
+                'February',
+                'March',
+                'April',
+                'May',
+                'June',
+                'July',
+                'August',
+                'September',
+                'October',
+                'November',
+                'December',
+              ];
+              joinDate = '${months[date.month - 1]} ${date.year}';
+            } catch (e) {
+              joinDate = userData['join_date'].toString();
+            }
+          } else {
+            joinDate = 'N/A';
+          }
+
+          isLoading = false;
+        });
+      } else {
+        // If no local data, fetch from API
+        await _fetchUserDataFromAPI();
+      }
+    } catch (e) {
+      print('Error loading user data: $e');
+      setState(() {
+        isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load user data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _fetchUserDataFromAPI() async {
+    try {
+      final user = await ApiService().getProfile();
+
+      if (user != null) {
+        // Save user data to storage
+        final userMap = {
+          'id': user.id,
+          'full_name': user.fullName,
+          'email': user.email,
+          'phone': user.phone,
+          'join_date': user.joinDate?.toIso8601String(),
+        };
+        await StorageService().saveUserData(userMap);
+
+        setState(() {
+          userName = user.fullName;
+          userEmail = user.email;
+          userPhone = user.phone ?? 'Not provided';
+
+          // Format join date
+          if (user.joinDate != null) {
+            try {
+              final date = user.joinDate!;
+              final months = [
+                'January',
+                'February',
+                'March',
+                'April',
+                'May',
+                'June',
+                'July',
+                'August',
+                'September',
+                'October',
+                'November',
+                'December',
+              ];
+              joinDate = '${months[date.month - 1]} ${date.year}';
+            } catch (e) {
+              joinDate = user.joinDate!.toIso8601String();
+            }
+          } else {
+            joinDate = 'N/A';
+          }
+
+          isLoading = false;
+        });
+      } else {
+        throw Exception('Failed to fetch profile');
+      }
+    } catch (e) {
+      print('Error fetching user data from API: $e');
+      setState(() {
+        isLoading = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to fetch user data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      body: Column(
-        children: [
-          // Header Section with Profile Info
-          _buildHeaderSection(),
+      body: isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
+            )
+          : Column(
+              children: [
+                // Header Section with Profile Info
+                _buildHeaderSection(),
 
-          // Profile Content
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 20),
+                // Profile Content
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _fetchUserDataFromAPI,
+                    color: const Color(0xFF2E7D32),
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 20),
 
-                  // Account Information Section
-                  _buildSectionTitle('Account Information'),
-                  const SizedBox(height: 12),
-                  _buildInfoCard(
-                    icon: Icons.person_outline,
-                    title: 'Full Name',
-                    value: userName,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoCard(
-                    icon: Icons.email_outlined,
-                    title: 'Email',
-                    value: userEmail,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoCard(
-                    icon: Icons.phone_outlined,
-                    title: 'Phone',
-                    value: userPhone,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoCard(
-                    icon: Icons.calendar_today_outlined,
-                    title: 'Member Since',
-                    value: joinDate,
-                  ),
+                          // Account Information Section
+                          _buildSectionTitle('Account Information'),
+                          const SizedBox(height: 12),
+                          _buildInfoCard(
+                            icon: Icons.person_outline,
+                            title: 'Full Name',
+                            value: userName,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoCard(
+                            icon: Icons.email_outlined,
+                            title: 'Email',
+                            value: userEmail,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoCard(
+                            icon: Icons.phone_outlined,
+                            title: 'Phone',
+                            value: userPhone,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoCard(
+                            icon: Icons.calendar_today_outlined,
+                            title: 'Member Since',
+                            value: joinDate,
+                          ),
 
-                  const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                  // Settings Section
-                  _buildSectionTitle('Settings'),
-                  const SizedBox(height: 12),
-                  _buildSettingsOption(
-                    icon: Icons.edit_outlined,
-                    title: 'Edit Profile',
-                    onTap: () {
-                      _showEditProfileDialog();
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSettingsOption(
-                    icon: Icons.lock_outline,
-                    title: 'Change Password',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Change password feature coming soon!'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSettingsOption(
-                    icon: Icons.notifications_outlined,
-                    title: 'Notifications',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Notification settings coming soon!'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _buildSettingsOption(
-                    icon: Icons.help_outline,
-                    title: 'Help & Support',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Help & Support coming soon!'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
-                  ),
+                          // Settings Section
+                          _buildSectionTitle('Settings'),
+                          const SizedBox(height: 12),
+                          _buildSettingsOption(
+                            icon: Icons.edit_outlined,
+                            title: 'Edit Profile',
+                            onTap: () {
+                              _showEditProfileDialog();
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _buildSettingsOption(
+                            icon: Icons.lock_outline,
+                            title: 'Change Password',
+                            onTap: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Change password feature coming soon!',
+                                  ),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _buildSettingsOption(
+                            icon: Icons.notifications_outlined,
+                            title: 'Notifications',
+                            onTap: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Notification settings coming soon!',
+                                  ),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          _buildSettingsOption(
+                            icon: Icons.help_outline,
+                            title: 'Help & Support',
+                            onTap: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Help & Support coming soon!'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
 
-                  const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-                  // Logout Button
-                  _buildLogoutButton(),
+                          // Logout Button
+                          _buildLogoutButton(),
 
-                  const SizedBox(height: 100),
-                ],
-              ),
+                          const SizedBox(height: 100),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -423,12 +574,20 @@ class _ProfilePageState extends State<ProfilePage> {
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const LoginPage()),
-                  (route) => false,
-                );
+
+                // Clear auth data
+                await StorageService().logout();
+                ApiService().clearAuthToken();
+
+                // Navigate to login
+                if (context.mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => const LoginPage()),
+                    (route) => false,
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

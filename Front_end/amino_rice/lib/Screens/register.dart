@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 import 'login.dart';
 import '../main.dart';
 
@@ -12,6 +13,7 @@ class RegisterPage extends StatefulWidget {
 class _RegisterPageState extends State<RegisterPage> {
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -196,6 +198,42 @@ class _RegisterPageState extends State<RegisterPage> {
                                   }
                                   return null;
                                 },
+                              ),
+
+                              const SizedBox(height: 20),
+
+                              // Phone Field (Optional)
+                              TextFormField(
+                                controller: _phoneController,
+                                keyboardType: TextInputType.phone,
+                                decoration: InputDecoration(
+                                  labelText: 'Phone (Optional)',
+                                  prefixIcon: const Icon(
+                                    Icons.phone_outlined,
+                                    color: Colors.black54,
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.grey[50],
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(15.0),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(15.0),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey[300]!,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(15.0),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFF2E7D32),
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
                               ),
 
                               const SizedBox(height: 20),
@@ -437,33 +475,73 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void _performRegistration() async {
+    // Validate form
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    // Check if passwords match
+    if (_passwordController.text != _confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Passwords do not match!'),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
-    // Simulate registration process
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Call API to register
+      final result = await ApiService().register(
+        fullName: _fullNameController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        phone: _phoneController.text.trim().isNotEmpty
+            ? _phoneController.text.trim()
+            : null,
+      );
 
-    if (mounted) {
+      if (result != null && mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully! Please login.'),
+            backgroundColor: Color(0xFF2E7D32),
+            duration: Duration(seconds: 3),
+          ),
+        );
+
+        // Navigate to login page
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+          );
+        }
+      }
+    } catch (e) {
       setState(() {
         _isLoading = false;
       });
 
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created successfully!'),
-          backgroundColor: Color(0xFF2E7D32),
-          duration: Duration(seconds: 2),
-        ),
-      );
-
-      // Navigate to login page
-      await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginPage()),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
     }

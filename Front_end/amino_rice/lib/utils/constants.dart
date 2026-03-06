@@ -9,8 +9,8 @@ class AppConstants {
       'AI-powered rice quality assessment application';
 
   // API Configuration
-  // TODO: Update this URL when the backend API is deployed
-  static const String apiBaseUrl = 'http://localhost:5000/api';
+  // Use 10.0.2.2 for Android emulator, 127.0.0.1 for iOS simulator
+  static const String apiBaseUrl = 'http://10.0.2.2:8000';
   static const Duration apiTimeout = Duration(seconds: 30);
 
   // Colors

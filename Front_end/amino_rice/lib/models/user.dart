@@ -28,14 +28,14 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'],
-      fullName: json['fullName'],
-      email: json['email'],
+      id: json['id'] ?? '',
+      fullName: json['full_name'] ?? '',
+      email: json['email'] ?? '',
       phone: json['phone'],
-      joinDate: json['joinDate'] != null
-          ? DateTime.parse(json['joinDate'])
+      joinDate: json['join_date'] != null
+          ? DateTime.parse(json['join_date'])
           : null,
-      profileImageUrl: json['profileImageUrl'],
+      profileImageUrl: json['profile_image_url'],
     );
   }
 }
