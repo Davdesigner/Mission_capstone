@@ -1,14 +1,21 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, File, UploadFile
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 import os
+import numpy as np
+from PIL import Image
+import io
+import onnxruntime as ort
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
 
 # ==================== Configuration ====================
 
@@ -16,11 +23,28 @@ import os
 MONGODB_URL = "mongodb+srv://aminostore_db_user:yGwj1LCERsQn34hH@amino01.obxcvq3.mongodb.net/?appName=Amino01"
 DATABASE_NAME = "aminorice_db"
 USERS_COLLECTION = "users"
+SCANS_COLLECTION = "scans"
+
+# Cloudinary Configuration
+CLOUDINARY_URL = "cloudinary://231636664184234:3EvPXWuWzgIFHsUfSwZX3f5Or4Q@dnkfri0vx"
+cloudinary.config(
+    cloudinary_url=CLOUDINARY_URL
+)
 
 # JWT Configuration
 SECRET_KEY = "your-secret-key-change-this-in-production-2026-aminorice-app"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+
+# Model Configuration
+MODEL_PATH = "Saved_model/rice_quality.onnx"
+IMG_SIZE = 224
+TARGET_COLUMNS = [
+    'Count', 'Broken_Count', 'Long_Count', 'Medium_Count',
+    'Black_Count', 'Chalky_Count', 'Red_Count', 'Yellow_Count',
+    'Green_Count', 'WK_Length_Average', 'WK_Width_Average',
+    'WK_LW_Ratio_Average', 'Average_L', 'Average_a', 'Average_b'
+]
 
 # ==================== FastAPI App ====================
 
@@ -51,11 +75,16 @@ class MongoDB:
     
 mongodb = MongoDB()
 
+# Global model variable
+model = None
+
 async def get_database():
     return mongodb.client[DATABASE_NAME]
 
 @app.on_event("startup")
 async def startup_db_client():
+    global model
+    # Connect to MongoDB
     mongodb.client = AsyncIOMotorClient(MONGODB_URL)
     try:
         # Test the connection
@@ -63,6 +92,27 @@ async def startup_db_client():
         print("Successfully connected to MongoDB!")
     except Exception as e:
         print(f"Error connecting to MongoDB: {e}")
+    
+    # Load ML Model
+    print(f"Attempting to load model from: {MODEL_PATH}")
+    print(f"Current working directory: {os.getcwd()}")
+    print(f"Model file exists: {os.path.exists(MODEL_PATH)}")
+    
+    try:
+        if not os.path.exists(MODEL_PATH):
+            print(f"ERROR: Model file not found at {MODEL_PATH}")
+            print(f"Please ensure the model file exists at: {os.path.abspath(MODEL_PATH)}")
+        else:
+            print("Loading ONNX model...")
+            model = ort.InferenceSession(MODEL_PATH, providers=['CPUExecutionProvider'])
+            print("Successfully loaded rice quality prediction model!")
+            print(f"Model inputs: {model.get_inputs()[0].name}, shape: {model.get_inputs()[0].shape}")
+            print(f"Model outputs: {len(model.get_outputs())} output(s)")
+    except Exception as e:
+        print(f"Error loading model: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
+        print("API will continue without prediction capabilities")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
@@ -105,6 +155,53 @@ class UserInDB(BaseModel):
     join_date: str
     created_at: str
     updated_at: str
+
+class GrainCharacteristics(BaseModel):
+    total_grains: float
+    broken_grains: float
+    long_grains: float
+    medium_grains: float
+
+class DefectiveGrains(BaseModel):
+    black_grains: float
+    chalky_grains: float
+    red_grains: float
+    yellow_grains: float
+    green_grains: float
+    total_defective: float
+
+class GrainMeasurements(BaseModel):
+    average_length: float
+    average_width: float
+    length_width_ratio: float
+
+class ColorCharacteristics(BaseModel):
+    average_L: float
+    average_a: float
+    average_b: float
+
+class Conclusion(BaseModel):
+    broken_grain_percentage: float
+    defective_grain_percentage: float
+    overall_quality_category: str
+    quality_description: str
+
+class PredictionResponse(BaseModel):
+    sample_information: dict
+    grain_characteristics: GrainCharacteristics
+    defective_grains: DefectiveGrains
+    grain_measurements: GrainMeasurements
+    color_characteristics: ColorCharacteristics
+    conclusion: Conclusion
+
+class ScanHistoryItem(BaseModel):
+    id: str
+    image_url: str
+    quality_grade: str
+    total_count: float
+    broken_percentage: float
+    defect_percentage: float
+    scanned_at: str
 
 # ==================== Helper Functions ====================
 
@@ -312,6 +409,391 @@ async def update_profile(
         created_at=current_user["created_at"]
     )
 
+# ==================== Helper Functions for Prediction ====================
+
+async def upload_to_cloudinary(image_bytes: bytes, filename: str) -> str:
+    """
+    Upload image to Cloudinary and return the URL
+    """
+    try:
+        # Upload image to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            image_bytes,
+            folder="aminorice_scans",
+            public_id=f"scan_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{filename}",
+            resource_type="image"
+        )
+        return upload_result['secure_url']
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error uploading image to cloud storage: {str(e)}"
+        )
+
+def preprocess_image(image_bytes: bytes) -> np.ndarray:
+    """
+    Preprocess image for ONNX model prediction
+    - Resize to 224x224
+    - Normalize using ImageNet statistics
+    - Convert to NCHW format (batch, channels, height, width)
+    """
+    # Load image from bytes
+    image = Image.open(io.BytesIO(image_bytes))
+    
+    # Convert to RGB if necessary
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
+    
+    # Resize
+    image = image.resize((IMG_SIZE, IMG_SIZE))
+    
+    # Convert to numpy array and normalize to [0, 1]
+    img_array = np.array(image).astype(np.float32) / 255.0
+    
+    # Apply ImageNet normalization
+    mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
+    std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+    img_array = (img_array - mean) / std
+    
+    # Convert from HWC to CHW format
+    img_array = np.transpose(img_array, (2, 0, 1))
+    
+    # Add batch dimension: (1, 3, 224, 224)
+    img_array = np.expand_dims(img_array, axis=0)
+    
+    return img_array
+
+def classify_rice_quality(broken_pct: float, defect_pct: float) -> tuple:
+    """
+    Classify rice quality based on detailed rules:
+    - Premium Quality: <5% broken, very low defects
+    - Good Quality: 5-15% broken, low defects
+    - Medium Quality: 15-25% broken, moderate defects
+    - Fair Quality: 25-35% broken, high defects
+    - Poor Quality: >35% broken, very high defects
+    """
+    if broken_pct < 5 and defect_pct < 3:
+        return "Premium Quality", "Broken grains less than 5%. Very low defective grains. Uniform grain size and color. Excellent quality suitable for premium markets."
+    elif broken_pct < 15 and defect_pct < 8:
+        return "Good Quality", "Broken grains between 5% and 15%. Low defective grains. Good quality suitable for standard markets."
+    elif broken_pct < 25 and defect_pct < 15:
+        return "Medium Quality", "Broken grains between 15% and 25%. Moderate defects. Acceptable quality for general consumption."
+    elif broken_pct < 35 and defect_pct < 25:
+        return "Fair Quality", "Broken grains between 25% and 35%. High level of defects. Lower grade quality."
+    else:
+        return "Poor Quality", "Broken grains greater than 35% or very high defects. Irregular grain characteristics. Suitable only for processing or animal feed."
+
+# ==================== Prediction Endpoint ====================
+
+@app.post("/predict", response_model=PredictionResponse)
+async def predict_rice_quality(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Predict rice quality from uploaded image
+    
+    - **file**: Image file (JPEG, PNG) of rice grains
+    
+    Returns 15 quality indicators and a quality summary
+    
+    Requires authentication token
+    """
+    # Check if model is loaded
+    if model is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Prediction model is not available"
+        )
+    
+    # Validate file type
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be an image (JPEG, PNG)"
+        )
+    
+    try:
+        # Read image bytes
+        image_bytes = await file.read()
+        
+        # Upload image to Cloudinary
+        image_url = await upload_to_cloudinary(image_bytes, file.filename or "rice_scan.png")
+        
+        # Preprocess image for prediction
+        processed_image = preprocess_image(image_bytes)
+        
+        # Make prediction with ONNX
+        input_name = model.get_inputs()[0].name
+        raw_predictions = model.run(None, {input_name: processed_image})
+        
+        # Convert predictions to numpy array
+        predictions_array = raw_predictions[0][0]
+        predictions_dict = {
+            TARGET_COLUMNS[i]: float(predictions_array[i])
+            for i in range(len(TARGET_COLUMNS))
+        }
+        
+        # Ensure non-negative values for counts
+        for key in predictions_dict:
+            if 'Count' in key:
+                predictions_dict[key] = max(0, predictions_dict[key])
+        
+        # Calculate derived indicators
+        total_count = predictions_dict['Count']
+        broken_count = predictions_dict['Broken_Count']
+        
+        # Calculate defective grains total
+        defect_count = (
+            predictions_dict['Black_Count'] + 
+            predictions_dict['Chalky_Count'] + 
+            predictions_dict['Red_Count'] + 
+            predictions_dict['Yellow_Count'] + 
+            predictions_dict['Green_Count']
+        )
+        
+        # Calculate percentages
+        if total_count > 0:
+            broken_pct = (broken_count / total_count) * 100
+            defect_pct = (defect_count / total_count) * 100
+        else:
+            broken_pct = 0
+            defect_pct = 0
+        
+        # Classify rice quality
+        quality_category, quality_description = classify_rice_quality(broken_pct, defect_pct)
+        
+        # Generate unique sample ID
+        scan_timestamp = datetime.utcnow()
+        sample_id = f"RICE_{scan_timestamp.strftime('%Y%m%d_%H%M%S')}"
+        
+        # Save scan to database
+        db = await get_database()
+        
+        scan_document = {
+            "user_id": str(current_user["_id"]),
+            "user_email": current_user["email"],
+            "sample_id": sample_id,
+            "image_url": image_url,
+            **predictions_dict,
+            "broken_percentage": round(broken_pct, 2),
+            "defect_percentage": round(defect_pct, 2),
+            "quality_category": quality_category,
+            "quality_description": quality_description,
+            "scanned_at": scan_timestamp.isoformat()
+        }
+        
+        result = await db[SCANS_COLLECTION].insert_one(scan_document)
+        
+        # Structure the response
+        response = PredictionResponse(
+            sample_information={
+                "sample_id": sample_id,
+                "scan_id": str(result.inserted_id),
+                "image_url": image_url,
+                "scanned_at": scan_timestamp.isoformat()
+            },
+            grain_characteristics=GrainCharacteristics(
+                total_grains=round(predictions_dict['Count'], 2),
+                broken_grains=round(predictions_dict['Broken_Count'], 2),
+                long_grains=round(predictions_dict['Long_Count'], 2),
+                medium_grains=round(predictions_dict['Medium_Count'], 2)
+            ),
+            defective_grains=DefectiveGrains(
+                black_grains=round(predictions_dict['Black_Count'], 2),
+                chalky_grains=round(predictions_dict['Chalky_Count'], 2),
+                red_grains=round(predictions_dict['Red_Count'], 2),
+                yellow_grains=round(predictions_dict['Yellow_Count'], 2),
+                green_grains=round(predictions_dict['Green_Count'], 2),
+                total_defective=round(defect_count, 2)
+            ),
+            grain_measurements=GrainMeasurements(
+                average_length=round(predictions_dict['WK_Length_Average'], 3),
+                average_width=round(predictions_dict['WK_Width_Average'], 3),
+                length_width_ratio=round(predictions_dict['WK_LW_Ratio_Average'], 3)
+            ),
+            color_characteristics=ColorCharacteristics(
+                average_L=round(predictions_dict['Average_L'], 2),
+                average_a=round(predictions_dict['Average_a'], 2),
+                average_b=round(predictions_dict['Average_b'], 2)
+            ),
+            conclusion=Conclusion(
+                broken_grain_percentage=round(broken_pct, 2),
+                defective_grain_percentage=round(defect_pct, 2),
+                overall_quality_category=quality_category,
+                quality_description=quality_description
+            )
+        )
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing image: {str(e)}"
+        )
+
+@app.get("/scans", response_model=List[ScanHistoryItem])
+async def get_scan_history(
+    limit: int = 20,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get user's scan history
+    
+    - **limit**: Maximum number of scans to return (default: 20)
+    
+    Returns list of previous scans with image URLs and quality summaries
+    
+    Requires authentication token
+    """
+    db = await get_database()
+    
+    # Get user's scans, sorted by most recent first
+    cursor = db[SCANS_COLLECTION].find(
+        {"user_id": str(current_user["_id"])}
+    ).sort("scanned_at", -1).limit(limit)
+    
+    scans = await cursor.to_list(length=limit)
+    
+    # Format response
+    scan_history = []
+    for scan in scans:
+        scan_history.append(ScanHistoryItem(
+            id=str(scan["_id"]),
+            image_url=scan["image_url"],
+            quality_grade=scan.get("quality_category", "Unknown"),
+            total_count=scan["Count"],
+            broken_percentage=scan.get("broken_percentage", 0),
+            defect_percentage=scan.get("defect_percentage", 0),
+            scanned_at=scan["scanned_at"]
+        ))
+    
+    return scan_history
+
+@app.get("/scans/{scan_id}", response_model=PredictionResponse)
+async def get_scan_details(
+    scan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get detailed information about a specific scan
+    
+    - **scan_id**: The ID of the scan
+    
+    Returns complete prediction results and quality analysis
+    
+    Requires authentication token
+    """
+    db = await get_database()
+    
+    # Validate scan_id format
+    try:
+        scan_object_id = ObjectId(scan_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid scan ID format"
+        )
+    
+    # Get scan from database
+    scan = await db[SCANS_COLLECTION].find_one({
+        "_id": scan_object_id,
+        "user_id": str(current_user["_id"])
+    })
+    
+    if not scan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scan not found"
+        )
+    
+    # Calculate defect count
+    defect_count = (
+        scan.get('Black_Count', 0) + 
+        scan.get('Chalky_Count', 0) + 
+        scan.get('Red_Count', 0) + 
+        scan.get('Yellow_Count', 0) + 
+        scan.get('Green_Count', 0)
+    )
+    
+    # Return scan details in new format
+    return PredictionResponse(
+        sample_information={
+            "sample_id": scan.get("sample_id", f"RICE_{scan['scanned_at'][:10]}"),
+            "scan_id": str(scan["_id"]),
+            "image_url": scan["image_url"],
+            "scanned_at": scan["scanned_at"]
+        },
+        grain_characteristics=GrainCharacteristics(
+            total_grains=round(scan["Count"], 2),
+            broken_grains=round(scan["Broken_Count"], 2),
+            long_grains=round(scan["Long_Count"], 2),
+            medium_grains=round(scan["Medium_Count"], 2)
+        ),
+        defective_grains=DefectiveGrains(
+            black_grains=round(scan["Black_Count"], 2),
+            chalky_grains=round(scan["Chalky_Count"], 2),
+            red_grains=round(scan["Red_Count"], 2),
+            yellow_grains=round(scan["Yellow_Count"], 2),
+            green_grains=round(scan["Green_Count"], 2),
+            total_defective=round(defect_count, 2)
+        ),
+        grain_measurements=GrainMeasurements(
+            average_length=round(scan["WK_Length_Average"], 3),
+            average_width=round(scan["WK_Width_Average"], 3),
+            length_width_ratio=round(scan["WK_LW_Ratio_Average"], 3)
+        ),
+        color_characteristics=ColorCharacteristics(
+            average_L=round(scan["Average_L"], 2),
+            average_a=round(scan["Average_a"], 2),
+            average_b=round(scan["Average_b"], 2)
+        ),
+        conclusion=Conclusion(
+            broken_grain_percentage=round(scan.get("broken_percentage", 0), 2),
+            defective_grain_percentage=round(scan.get("defect_percentage", 0), 2),
+            overall_quality_category=scan.get("quality_category", "Unknown"),
+            quality_description=scan.get("quality_description", "Quality information not available")
+        )
+    )
+
+@app.delete("/scans/{scan_id}")
+async def delete_scan(
+    scan_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Delete a scan from history
+    
+    - **scan_id**: The ID of the scan to delete
+    
+    Requires authentication token
+    """
+    db = await get_database()
+    
+    # Validate scan_id format
+    try:
+        scan_object_id = ObjectId(scan_id)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid scan ID format"
+        )
+    
+    # Delete scan
+    result = await db[SCANS_COLLECTION].delete_one({
+        "_id": scan_object_id,
+        "user_id": str(current_user["_id"])
+    })
+    
+    if result.deleted_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scan not found"
+        )
+    
+    return {"message": "Scan deleted successfully"}
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -322,9 +804,12 @@ async def health_check():
     except Exception as e:
         db_status = f"error: {str(e)}"
     
+    model_status = "loaded" if model is not None else "not loaded"
+    
     return {
         "status": "healthy",
         "database": db_status,
+        "model": model_status,
         "timestamp": datetime.utcnow().isoformat()
     }
 

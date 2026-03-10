@@ -10,6 +10,10 @@ FastAPI backend for AminoRice - Rice Quality Assurance Application
 - ✅ MongoDB Integration
 - ✅ Password Hashing (bcrypt)
 - ✅ CORS enabled for Flutter app
+- ✅ **AI-Powered Rice Quality Prediction** (MobileNetV2 CNN)
+- ✅ **15 Quality Indicators from Images**
+- ✅ **Cloudinary Image Storage** - Permanent cloud storage for scan images
+- ✅ **Scan History & Analytics** - Track and review past predictions
 
 ## API Endpoints
 
@@ -115,13 +119,253 @@ Authorization: Bearer <token>
 }
 ```
 
-#### 6. Health Check
+#### 6. Predict Rice Quality from Image 🌾🤖
+
+```
+POST /predict
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+```
+
+Upload a rice grain image to get quality analysis and predictions.
+
+**Request:**
+
+```bash
+curl -X POST "http://localhost:8000/predict" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -F "file=@rice_sample.png"
+```
+
+**Response:**
+
+```json
+{
+  "sample_information": {
+    "sample_id": "RICE_20260308_143022",
+    "scan_id": "65f1234567890abcdef12345",
+    "image_url": "https://res.cloudinary.com/dnkfri0vx/image/upload/v1234567890/aminorice_scans/scan_20260308_143022_rice.png",
+    "scanned_at": "2026-03-08T14:30:22.123456"
+  },
+  "grain_characteristics": {
+    "total_grains": 1523.45,
+    "broken_grains": 123.82,
+    "long_grains": 856.32,
+    "medium_grains": 12.45
+  },
+  "defective_grains": {
+    "black_grains": 34.67,
+    "chalky_grains": 45.23,
+    "red_grains": 23.45,
+    "yellow_grains": 17.89,
+    "green_grains": 12.34,
+    "total_defective": 133.58
+  },
+  "grain_measurements": {
+    "average_length": 6.45,
+    "average_width": 2.13,
+    "length_width_ratio": 3.028
+  },
+  "color_characteristics": {
+    "average_L": 65.23,
+    "average_a": 5.67,
+    "average_b": 23.45
+  },
+  "conclusion": {
+    "broken_grain_percentage": 8.13,
+    "defective_grain_percentage": 8.77,
+    "overall_quality_category": "Good Quality",
+    "quality_description": "Broken grains between 5% and 15%. Low defective grains. Good quality suitable for standard markets."
+  }
+}
+```
+
+**Quality Indicators Explained:**
+
+- **total_grains**: Total number of rice grains detected
+- **broken_grains**: Number of broken/damaged grains
+- **long_grains**: Number of long-grain rice
+- **medium_grains**: Number of medium-length grains
+- **black_grains**: Dark/black colored grains (defect indicator)
+- **chalky_grains**: Chalky grains (quality defect affecting milling)
+- **red_grains**: Red-colored grains
+- **yellow_grains**: Yellow-colored grains (aging/moisture indicator)
+- **green_grains**: Immature green grains
+- **average_length**: Average grain length (mm)
+- **average_width**: Average grain width (mm)
+- **length_width_ratio**: Length-to-width ratio
+- **average_L**: Average lightness (L\* color value)
+- **average_a**: Red-green color axis (a\*)
+- **average_b**: Yellow-blue color axis (b\*)
+
+**Quality Classification System:**
+
+The API classifies rice into five quality categories based on broken grain percentage and defective grain percentage:
+
+1. **Premium Quality**
+   - Broken grains: < 5%
+   - Defective grains: < 3%
+   - Description: Very low defective grains. Uniform grain size and color. Excellent quality suitable for premium markets.
+
+2. **Good Quality**
+   - Broken grains: 5% - 15%
+   - Defective grains: < 8%
+   - Description: Low defective grains. Good quality suitable for standard markets.
+
+3. **Medium Quality**
+   - Broken grains: 15% - 25%
+   - Defective grains: < 15%
+   - Description: Moderate defects. Acceptable quality for general consumption.
+
+4. **Fair Quality**
+   - Broken grains: 25% - 35%
+   - Defective grains: < 25%
+   - Description: High level of defects. Lower grade quality.
+
+5. **Poor Quality**
+   - Broken grains: > 35% or defective grains > 25%
+   - Description: Very high defects. Irregular grain characteristics. Suitable only for processing or animal feed.
+
+**Calculated Indicators:**
+
+- **Broken Grain Percentage** = (Broken_Count / Total_Count) × 100
+- **Defective Grain Percentage** = (Black + Chalky + Red + Yellow + Green) / Total_Count × 100
+
+**Model Information:**
+
+- Architecture: PyTorch Deep Learning Model
+- Model File: `rice_quality_best.pt`
+- Input: 224×224 RGB images
+- Training: Labeled rice grain dataset
+- Output: 15 continuous numerical predictions
+
+#### 7. Health Check
 
 ```
 GET /health
 ```
 
-Returns API health status and database connection status.
+Returns API health status, database connection, and model loading status.
+
+**Response:**
+
+```json
+{
+  "status": "healthy",
+  "database": "connected",
+  "model": "loaded",
+  "timestamp": "2026-03-08T12:34:56"
+}
+```
+
+### Scan History Endpoints
+
+#### 8. Get Scan History
+
+```
+GET /scans?limit=20
+Authorization: Bearer <token>
+```
+
+Get user's scan history with summary information.
+
+**Query Parameters:**
+
+- `limit` (optional): Maximum number of scans to return (default: 20)
+
+**Response:**
+
+```json
+[
+  {
+    "id": "65f1234567890abcdef12345",
+    "image_url": "https://res.cloudinary.com/dnkfri0vx/image/upload/.../scan.png",
+    "quality_grade": "Good",
+    "total_count": 1523.45,
+    "broken_percentage": 8.13,
+    "defect_percentage": 12.45,
+    "scanned_at": "2026-03-08T14:30:22.123456"
+  },
+  {
+    "id": "65f1234567890abcdef12346",
+    "image_url": "https://res.cloudinary.com/dnkfri0vx/image/upload/.../scan.png",
+    "quality_grade": "Premium",
+    "total_count": 1845.32,
+    "broken_percentage": 3.21,
+    "defect_percentage": 2.56,
+    "scanned_at": "2026-03-07T10:15:45.789012"
+  }
+]
+```
+
+#### 9. Get Scan Details
+
+```
+GET /scans/{scan_id}
+Authorization: Bearer <token>
+```
+
+Get complete details for a specific scan including all 15 quality indicators.
+
+**Response:**
+
+```json
+{
+  "sample_information": {
+    "sample_id": "RICE_20260308_143022",
+    "scan_id": "65f1234567890abcdef12345",
+    "image_url": "https://res.cloudinary.com/dnkfri0vx/image/upload/.../scan.png",
+    "scanned_at": "2026-03-08T14:30:22.123456"
+  },
+  "grain_characteristics": {
+    "total_grains": 1523.45,
+    "broken_grains": 123.82,
+    "long_grains": 856.32,
+    "medium_grains": 12.45
+  },
+  "defective_grains": {
+    "black_grains": 34.67,
+    "chalky_grains": 45.23,
+    "red_grains": 23.45,
+    "yellow_grains": 17.89,
+    "green_grains": 12.34,
+    "total_defective": 133.58
+  },
+  "grain_measurements": {
+    "average_length": 6.45,
+    "average_width": 2.13,
+    "length_width_ratio": 3.028
+  },
+  "color_characteristics": {
+    "average_L": 65.23,
+    "average_a": 5.67,
+    "average_b": 23.45
+  },
+  "conclusion": {
+    "broken_grain_percentage": 8.13,
+    "defective_grain_percentage": 8.77,
+    "overall_quality_category": "Good Quality",
+    "quality_description": "Broken grains between 5% and 15%. Low defective grains. Good quality suitable for standard markets."
+  }
+}
+```
+
+#### 10. Delete Scan
+
+```
+DELETE /scans/{scan_id}
+Authorization: Bearer <token>
+```
+
+Delete a scan from history.
+
+**Response:**
+
+```json
+{
+  "message": "Scan deleted successfully"
+}
+```
 
 ## Setup Instructions
 
@@ -137,9 +381,22 @@ pip install -r requirements.txt
 The API is already configured to connect to your MongoDB Atlas cluster:
 
 - Database: `aminorice_db`
-- Collection: `users`
+- Collections:
+  - `users` - User accounts and authentication
+  - `scans` - Rice quality scan history and results
 
-### 3. Run the API
+### 3. Cloudinary Configuration
+
+The API uses Cloudinary for cloud-based image storage:
+
+- **Purpose**: Stores uploaded rice grain images permanently
+- **Folder**: `aminorice_scans/`
+- **Configuration**: Already configured in `app.py`
+- **URL Format**: Images are accessible via HTTPS URLs
+
+All scan images are automatically uploaded to Cloudinary when predictions are made.
+
+### 4. Run the API
 
 ```bash
 uvicorn app:app --reload
@@ -147,7 +404,7 @@ uvicorn app:app --reload
 
 The API will be available at: `http://localhost:8000`
 
-### 4. Access API Documentation
+### 5. Access API Documentation
 
 FastAPI provides automatic interactive documentation:
 
