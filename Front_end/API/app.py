@@ -26,9 +26,10 @@ USERS_COLLECTION = "users"
 SCANS_COLLECTION = "scans"
 
 # Cloudinary Configuration
-CLOUDINARY_URL = "cloudinary://231636664184234:3EvPXWuWzgIFHsUfSwZX3f5Or4Q@dnkfri0vx"
 cloudinary.config(
-    cloudinary_url=CLOUDINARY_URL
+    cloud_name="dnkfri0vx",
+    api_key="283989368319466",
+    api_secret="sJLP16-UO5ajcibrwCDongJbTXE"
 )
 
 # JWT Configuration
