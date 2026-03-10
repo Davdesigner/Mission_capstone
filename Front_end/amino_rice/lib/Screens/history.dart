@@ -301,9 +301,9 @@ class _HistoryPageState extends State<HistoryPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Image ID/Name
+                    // Sample ID
                     Text(
-                      _getImageName(item.imageUrl),
+                      item.id,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
