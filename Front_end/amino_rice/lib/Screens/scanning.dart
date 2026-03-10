@@ -7,6 +7,8 @@ import '../widgets/main_navbar.dart';
 import 'history.dart';
 import 'chatbot.dart';
 import 'profile.dart';
+import '../services/api_service.dart';
+import '../models/scan_result.dart';
 
 class RecordPage extends StatefulWidget {
   const RecordPage({super.key});
@@ -556,38 +558,70 @@ class _RecordPageState extends State<RecordPage> {
   }
 
   Future<void> _scanImage() async {
+    if (_selectedImage == null) return;
+
     setState(() {
       _isProcessing = true;
     });
 
-    // Simulate scanning process
-    await Future.delayed(const Duration(seconds: 3));
+    try {
+      // Call API to analyze rice
+      final apiService = ApiService();
+      final result = await apiService.analyzeRice(_selectedImage!);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _isProcessing = false;
-    });
+      setState(() {
+        _isProcessing = false;
+      });
 
-    // Show success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            SizedBox(width: 12),
-            Expanded(child: Text('Scan complete! Check results for analysis.')),
-          ],
+      if (result != null) {
+        // Show results dialog
+        _showResultsDialog(result);
+
+        // Clear the selected image after successful scan
+        setState(() {
+          _selectedImage = null;
+        });
+      } else {
+        // Show error message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('Failed to analyze image. Please try again.'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isProcessing = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 12),
+              Expanded(child: Text('Error: ${e.toString()}')),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
         ),
-        backgroundColor: const Color(0xFF2E7D32),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-
-    // Clear the selected image after successful scan
-    setState(() {
-      _selectedImage = null;
-    });
+      );
+    }
   }
 
   Widget _buildHeaderSection() {
@@ -872,5 +906,355 @@ class _RecordPageState extends State<RecordPage> {
         );
       },
     );
+  }
+
+  void _showResultsDialog(ScanResult result) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        // Determine quality color
+        Color qualityColor = _getQualityColor(
+          result.conclusion.overallQualityCategory,
+        );
+
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 700, maxWidth: 500),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        const Color(0xFF2E7D32),
+                        const Color(0xFF66BB6A),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.assessment,
+                        size: 50,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Analysis Results',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        'Sample ID: ${result.sampleInformation.sampleId}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Scrollable Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Grain Characteristics
+                        _buildSectionTitle('Grain Characteristics'),
+                        const SizedBox(height: 10),
+                        _buildInfoCard([
+                          _buildInfoRow(
+                            'Total Grains',
+                            '${result.grainCharacteristics.totalGrains.toStringAsFixed(0)}',
+                          ),
+                          _buildInfoRow(
+                            'Broken Grains',
+                            '${result.grainCharacteristics.brokenGrains.toStringAsFixed(0)}',
+                          ),
+                          _buildInfoRow(
+                            'Long Grains',
+                            '${result.grainCharacteristics.longGrains.toStringAsFixed(0)}',
+                          ),
+                          _buildInfoRow(
+                            'Medium Grains',
+                            '${result.grainCharacteristics.mediumGrains.toStringAsFixed(0)}',
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
+
+                        // Defective Grains
+                        _buildSectionTitle('Defective Grains'),
+                        const SizedBox(height: 10),
+                        _buildInfoCard([
+                          _buildInfoRow(
+                            'Black Grains',
+                            '${result.defectiveGrains.blackGrains.toStringAsFixed(0)}',
+                          ),
+                          _buildInfoRow(
+                            'Chalky Grains',
+                            '${result.defectiveGrains.chalkyGrains.toStringAsFixed(0)}',
+                          ),
+                          _buildInfoRow(
+                            'Red Grains',
+                            '${result.defectiveGrains.redGrains.toStringAsFixed(0)}',
+                          ),
+                          _buildInfoRow(
+                            'Yellow Grains',
+                            '${result.defectiveGrains.yellowGrains.toStringAsFixed(0)}',
+                          ),
+                          _buildInfoRow(
+                            'Green Grains',
+                            '${result.defectiveGrains.greenGrains.toStringAsFixed(0)}',
+                          ),
+                          _buildInfoRow(
+                            'Total Defective',
+                            '${result.defectiveGrains.totalDefective.toStringAsFixed(0)}',
+                            isBold: true,
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
+
+                        // Grain Measurements
+                        _buildSectionTitle('Grain Measurements'),
+                        const SizedBox(height: 10),
+                        _buildInfoCard([
+                          _buildInfoRow(
+                            'Average Length',
+                            '${result.grainMeasurements.averageLength.toStringAsFixed(3)} mm',
+                          ),
+                          _buildInfoRow(
+                            'Average Width',
+                            '${result.grainMeasurements.averageWidth.toStringAsFixed(3)} mm',
+                          ),
+                          _buildInfoRow(
+                            'Length/Width Ratio',
+                            '${result.grainMeasurements.lengthWidthRatio.toStringAsFixed(3)}',
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
+
+                        // Color Characteristics
+                        _buildSectionTitle('Color Characteristics (LAB)'),
+                        const SizedBox(height: 10),
+                        _buildInfoCard([
+                          _buildInfoRow(
+                            'L (Lightness)',
+                            '${result.colorCharacteristics.averageL.toStringAsFixed(2)}',
+                          ),
+                          _buildInfoRow(
+                            'a (Green-Red)',
+                            '${result.colorCharacteristics.averageA.toStringAsFixed(2)}',
+                          ),
+                          _buildInfoRow(
+                            'b (Blue-Yellow)',
+                            '${result.colorCharacteristics.averageB.toStringAsFixed(2)}',
+                          ),
+                        ]),
+                        const SizedBox(height: 20),
+
+                        // Conclusion Box
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: qualityColor.withOpacity(0.1),
+                            border: Border.all(color: qualityColor, width: 2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Conclusion',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: qualityColor,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Rice has ${result.conclusion.brokenGrainPercentage.toStringAsFixed(2)}% broken grains, ${result.conclusion.defectiveGrainPercentage.toStringAsFixed(2)}% chalky/defective grains.',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey[800],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  const Text(
+                                    'Result: ',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    result.conclusion.overallQualityCategory,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: qualityColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                result.conclusion.qualityDescription,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.grey[700],
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Action Buttons
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF2E7D32),
+                            side: const BorderSide(color: Color(0xFF2E7D32)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('Close'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const HistoryPage(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2E7D32),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text('View History'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+        color: Color(0xFF2E7D32),
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey[300]!),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildInfoRow(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey[700],
+              fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getQualityColor(String quality) {
+    final lowerQuality = quality.toLowerCase();
+    if (lowerQuality.contains('premium')) {
+      return Colors.green[700]!;
+    } else if (lowerQuality.contains('good')) {
+      return Colors.green;
+    } else if (lowerQuality.contains('medium')) {
+      return Colors.orange;
+    } else if (lowerQuality.contains('fair')) {
+      return Colors.orange[800]!;
+    } else if (lowerQuality.contains('poor')) {
+      return Colors.red;
+    }
+    return Colors.grey;
   }
 }

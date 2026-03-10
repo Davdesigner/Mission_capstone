@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:mime/mime.dart';
+import 'package:http_parser/http_parser.dart';
 import '../models/scan_result.dart';
 import '../models/user.dart';
 
@@ -196,11 +198,18 @@ class ApiService {
       // Add the image file
       final imageStream = http.ByteStream(imageFile.openRead());
       final imageLength = await imageFile.length();
+      final filename = imageFile.path.split('/').last;
+
+      // Determine mime type
+      final mimeType = lookupMimeType(imageFile.path) ?? 'image/jpeg';
+      final mimeTypeData = mimeType.split('/');
+
       final multipartFile = http.MultipartFile(
-        'image',
+        'file',
         imageStream,
         imageLength,
-        filename: imageFile.path.split('/').last,
+        filename: filename,
+        contentType: MediaType(mimeTypeData[0], mimeTypeData[1]),
       );
 
       request.files.add(multipartFile);
