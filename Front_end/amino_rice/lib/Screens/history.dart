@@ -1,9 +1,46 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:intl/intl.dart';
 import '../widgets/main_navbar.dart';
 import 'chatbot.dart';
 import 'login.dart';
 import 'scanning.dart';
 import 'profile.dart';
+import '../services/api_service.dart';
+import '../models/scan_result.dart';
+
+// Data model for scan history items
+class ScanHistoryItem {
+  final String id;
+  final String imageUrl;
+  final String qualityGrade;
+  final double totalCount;
+  final double brokenPercentage;
+  final double defectPercentage;
+  final String scannedAt;
+
+  ScanHistoryItem({
+    required this.id,
+    required this.imageUrl,
+    required this.qualityGrade,
+    required this.totalCount,
+    required this.brokenPercentage,
+    required this.defectPercentage,
+    required this.scannedAt,
+  });
+
+  factory ScanHistoryItem.fromJson(Map<String, dynamic> json) {
+    return ScanHistoryItem(
+      id: json['_id'] ?? json['id'] ?? '',
+      imageUrl: json['image_url'] ?? '',
+      qualityGrade: json['quality_grade'] ?? 'Unknown',
+      totalCount: (json['total_count'] ?? 0).toDouble(),
+      brokenPercentage: (json['broken_percentage'] ?? 0).toDouble(),
+      defectPercentage: (json['defect_percentage'] ?? 0).toDouble(),
+      scannedAt: json['scanned_at'] ?? '',
+    );
+  }
+}
 
 class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
@@ -14,9 +51,52 @@ class HistoryPage extends StatefulWidget {
 
 class _HistoryPageState extends State<HistoryPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  // Sample history data - empty for now
-  // ignore: unused_field
-  final List<HistoryItem> _historyItems = [];
+  List<ScanHistoryItem> _historyItems = [];
+  bool _isLoading = true;
+  final ApiService _apiService = ApiService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final historyData = await _apiService.getScanHistory(limit: 50);
+
+      if (historyData != null && mounted) {
+        setState(() {
+          _historyItems = historyData
+              .map((item) => ScanHistoryItem.fromJson(item))
+              .toList();
+          _isLoading = false;
+        });
+      } else {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading history: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,20 +112,32 @@ class _HistoryPageState extends State<HistoryPage> {
 
           // Content Section with padding
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 20),
-
-                  // Empty State
-                  _buildEmptyState(),
-
-                  const SizedBox(height: 100),
-                ],
-              ),
-            ),
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
+                  )
+                : _historyItems.isEmpty
+                ? SingleChildScrollView(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 20),
+                        _buildEmptyState(),
+                        const SizedBox(height: 100),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: _loadHistory,
+                    color: const Color(0xFF2E7D32),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(20.0),
+                      itemCount: _historyItems.length,
+                      itemBuilder: (context, index) {
+                        return _buildHistoryCard(_historyItems[index]);
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
@@ -134,143 +226,157 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  // ignore: unused_element
-  Widget _buildHistoryCard(HistoryItem item) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[200]!),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+  Widget _buildHistoryCard(ScanHistoryItem item) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Slidable(
+        key: Key(item.id),
+
+        // Left side action - Delete (swipe right-to-left reveals this on the LEFT)
+        startActionPane: ActionPane(
+          motion: const StretchMotion(),
+          extentRatio: 0.25,
+          children: [
+            SlidableAction(
+              onPressed: (context) => _confirmDelete(item),
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              icon: Icons.delete,
+              label: 'Delete',
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ],
+        ),
+
+        // Right side action - View More (swipe left-to-right reveals this on the RIGHT)
+        endActionPane: ActionPane(
+          motion: const StretchMotion(),
+          extentRatio: 0.25,
+          children: [
+            SlidableAction(
+              onPressed: (context) => _viewDetails(item),
+              backgroundColor: const Color(0xFF2E7D32),
+              foregroundColor: Colors.white,
+              icon: Icons.visibility,
+              label: 'View More',
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ],
+        ),
+
+        // Main card content
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[200]!),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _getAnalysisColor(item.analysis).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+              // Icon based on quality
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _getQualityColor(item.qualityGrade).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.grain,
+                  size: 24,
+                  color: _getQualityColor(item.qualityGrade),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Main content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Image ID/Name
+                    Text(
+                      _getImageName(item.imageUrl),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
                     ),
-                    child: Icon(
-                      _getAnalysisIcon(item.analysis),
-                      size: 20,
-                      color: _getAnalysisColor(item.analysis),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.analysis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                    const SizedBox(height: 4),
+
+                    // Date and Time
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today,
+                          size: 12,
+                          color: Colors.grey[600],
                         ),
-                      ),
-                      Text(
-                        '${item.confidence}% confidence',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              _buildStatusChip(item.status),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _formatDateTime(item.date),
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              ),
-              Text(
-                'Duration: ${_formatDuration(item.duration)}',
-                style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _playRecording(item),
-                  icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                  label: const Text('Play'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFFF6B35),
-                    side: const BorderSide(color: Color(0xFFFF6B35)),
-                  ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDate(item.scannedAt),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Icon(
+                          Icons.access_time,
+                          size: 12,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatTime(item.scannedAt),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Quality Result
+                    Row(
+                      children: [
+                        const Text(
+                          'Result: ',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        Text(
+                          item.qualityGrade,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: _getQualityColor(item.qualityGrade),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _shareAnalysis(item),
-                  icon: const Icon(Icons.description_outlined, size: 18),
-                  label: const Text('Details'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.grey[600],
-                    side: BorderSide(color: Colors.grey[300]!),
-                  ),
-                ),
-              ),
+
+              // Swipe indicator
+              Icon(Icons.drag_handle, color: Colors.grey[400], size: 20),
             ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(AnalysisStatus status) {
-    Color color;
-    String text;
-
-    switch (status) {
-      case AnalysisStatus.completed:
-        color = Colors.green;
-        text = 'Completed';
-        break;
-      case AnalysisStatus.lowConfidence:
-        color = Colors.orange;
-        text = 'Low Confidence';
-        break;
-      case AnalysisStatus.failed:
-        color = Colors.red;
-        text = 'Failed';
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 12,
-          color: color,
-          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -321,167 +427,596 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 
-  // Helper methods
+  // Helper methods for scan history
 
-  Color _getAnalysisColor(String analysis) {
-    switch (analysis.toLowerCase()) {
-      case 'hunger':
-        return Colors.orange;
-      case 'discomfort':
-        return Colors.red;
-      case 'tired':
-        return Colors.blue;
-      case 'pain':
-        return Colors.purple;
+  Color _getQualityColor(String quality) {
+    switch (quality.toLowerCase()) {
+      case 'premium':
+        return const Color(0xFF1565C0); // Dark Blue
+      case 'good':
+        return const Color(0xFF2E7D32); // Green
+      case 'medium':
+        return const Color(0xFFF9A825); // Yellow/Gold
+      case 'fair':
+        return const Color(0xFFFF6F00); // Orange
+      case 'poor':
+        return const Color(0xFFC62828); // Red
       default:
         return Colors.grey;
     }
   }
 
-  IconData _getAnalysisIcon(String analysis) {
-    switch (analysis.toLowerCase()) {
-      case 'hunger':
-        return Icons.restaurant;
-      case 'discomfort':
-        return Icons.sentiment_dissatisfied;
-      case 'tired':
-        return Icons.bedtime;
-      case 'pain':
-        return Icons.healing;
-      default:
-        return Icons.help_outline;
+  String _getImageName(String imageUrl) {
+    try {
+      // Extract filename from URL
+      final uri = Uri.parse(imageUrl);
+      final pathSegments = uri.pathSegments;
+      if (pathSegments.isNotEmpty) {
+        String filename = pathSegments.last;
+        // Remove file extension for display
+        if (filename.contains('.')) {
+          filename = filename.substring(0, filename.lastIndexOf('.'));
+        }
+        // Decode URL encoding
+        filename = Uri.decodeComponent(filename);
+        return filename;
+      }
+      return 'Unknown';
+    } catch (e) {
+      return 'Unknown';
     }
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inDays == 0) {
-      return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
-    } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+  String _formatDate(String dateTimeString) {
+    try {
+      final dateTime = DateTime.parse(dateTimeString);
+      return DateFormat('MMM d, yyyy').format(dateTime);
+    } catch (e) {
+      return 'Unknown date';
     }
   }
 
-  String _formatDuration(Duration duration) {
-    return '${duration.inSeconds}s';
+  String _formatTime(String dateTimeString) {
+    try {
+      final dateTime = DateTime.parse(dateTimeString);
+      return DateFormat('h:mm a').format(dateTime);
+    } catch (e) {
+      return '';
+    }
   }
 
-  void _playRecording(HistoryItem item) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Playing recording from ${_formatDateTime(item.date)}'),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
-      ),
+  Future<void> _confirmDelete(ScanHistoryItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'Delete Scan',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          content: const Text(
+            'Are you sure you want to permanently delete this scan record?',
+            style: TextStyle(color: Colors.black54),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
     );
+
+    if (confirmed == true) {
+      await _deleteScan(item);
+    }
   }
 
-  void _shareAnalysis(HistoryItem item) {
-    _showRecommendationDialog(item);
+  Future<void> _deleteScan(ScanHistoryItem item) async {
+    try {
+      final success = await _apiService.deleteScan(item.id);
+
+      if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Scan deleted successfully'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
+        // Refresh the list
+        _loadHistory();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to delete scan'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 
-  void _showRecommendationDialog(HistoryItem item) {
+  Future<void> _viewDetails(ScanHistoryItem item) async {
+    try {
+      final result = await _apiService.getScanDetails(item.id);
+
+      if (result != null && mounted) {
+        _showScanDetailsDialog(result);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to load scan details'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showScanDetailsDialog(ScanResult result) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return Dialog(
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
           ),
-          elevation: 8,
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(20),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.grain, color: Colors.white, size: 28),
+                      const SizedBox(width: 12),
+                      const Expanded(
+                        child: Text(
+                          'Scan Results',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+                // Scrollable Content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildDetailSection('Sample Information', [
+                          _buildDetailItem(
+                            'Sample ID',
+                            result.sampleInformation.sampleId,
+                          ),
+                          _buildDetailItem(
+                            'Date Scanned',
+                            _formatDate(result.sampleInformation.scannedAt),
+                          ),
+                          _buildDetailItem(
+                            'Time',
+                            _formatTime(result.sampleInformation.scannedAt),
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
+                        _buildDetailSection('Grain Characteristics', [
+                          _buildDetailItem(
+                            'Total Grain Count',
+                            result.grainCharacteristics.totalGrains
+                                .toStringAsFixed(0),
+                          ),
+                          _buildDetailItem(
+                            'Long Grains',
+                            result.grainCharacteristics.longGrains
+                                .toStringAsFixed(0),
+                          ),
+                          _buildDetailItem(
+                            'Medium Grains',
+                            result.grainCharacteristics.mediumGrains
+                                .toStringAsFixed(0),
+                          ),
+                          _buildDetailItem(
+                            'Broken Grains',
+                            result.grainCharacteristics.brokenGrains
+                                .toStringAsFixed(0),
+                          ),
+                          _buildDetailItem(
+                            'Broken Percentage',
+                            '${result.conclusion.brokenGrainPercentage.toStringAsFixed(2)}%',
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
+                        _buildDetailSection('Defective Grains', [
+                          _buildDetailItem(
+                            'Total Defects',
+                            result.defectiveGrains.totalDefective
+                                .toStringAsFixed(0),
+                          ),
+                          _buildDetailItem(
+                            'Black Grains',
+                            result.defectiveGrains.blackGrains.toStringAsFixed(
+                              0,
+                            ),
+                          ),
+                          _buildDetailItem(
+                            'Chalky Grains',
+                            result.defectiveGrains.chalkyGrains.toStringAsFixed(
+                              0,
+                            ),
+                          ),
+                          _buildDetailItem(
+                            'Red Grains',
+                            result.defectiveGrains.redGrains.toStringAsFixed(0),
+                          ),
+                          _buildDetailItem(
+                            'Yellow Grains',
+                            result.defectiveGrains.yellowGrains.toStringAsFixed(
+                              0,
+                            ),
+                          ),
+                          _buildDetailItem(
+                            'Green Grains',
+                            result.defectiveGrains.greenGrains.toStringAsFixed(
+                              0,
+                            ),
+                          ),
+                          _buildDetailItem(
+                            'Defect Percentage',
+                            '${result.conclusion.defectiveGrainPercentage.toStringAsFixed(2)}%',
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
+                        _buildDetailSection('Grain Measurements', [
+                          _buildDetailItem(
+                            'Average Length',
+                            '${result.grainMeasurements.averageLength.toStringAsFixed(2)} mm',
+                          ),
+                          _buildDetailItem(
+                            'Average Width',
+                            '${result.grainMeasurements.averageWidth.toStringAsFixed(2)} mm',
+                          ),
+                          _buildDetailItem(
+                            'Length/Width Ratio',
+                            result.grainMeasurements.lengthWidthRatio
+                                .toStringAsFixed(2),
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
+                        _buildDetailSection('Color Characteristics', [
+                          _buildDetailItem(
+                            'Average L* (Lightness)',
+                            result.colorCharacteristics.averageL
+                                .toStringAsFixed(2),
+                          ),
+                          _buildDetailItem(
+                            'Average a* (Red/Green)',
+                            result.colorCharacteristics.averageA
+                                .toStringAsFixed(2),
+                          ),
+                          _buildDetailItem(
+                            'Average b* (Yellow/Blue)',
+                            result.colorCharacteristics.averageB
+                                .toStringAsFixed(2),
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
+                        _buildDetailSection('Conclusion', [
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: _getQualityColor(
+                                result.conclusion.overallQualityCategory,
+                              ).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: _getQualityColor(
+                                  result.conclusion.overallQualityCategory,
+                                ).withOpacity(0.3),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Text(
+                                      'Quality: ',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    Text(
+                                      result.conclusion.overallQualityCategory,
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                        color: _getQualityColor(
+                                          result
+                                              .conclusion
+                                              .overallQualityCategory,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  result.conclusion.qualityDescription,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.black87,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ]),
+                      ],
+                    ),
+                  ),
+                ),
+                // Bottom buttons
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close, size: 18),
+                          label: const Text('Close'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () =>
+                              _viewImage(result.sampleInformation.imageUrl),
+                          icon: const Icon(Icons.image, size: 18),
+                          label: const Text('View Image'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2E7D32),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _viewImage(String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Colored header section
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.all(Radius.circular(16)),
-                ),
-                child: const Text(
-                  'Recommendation',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
+              // Close button
+              Align(
+                alignment: Alignment.topRight,
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close, color: Colors.white, size: 30),
                 ),
               ),
-              // White content section
+              // Image
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(16),
-                    bottomRight: Radius.circular(16),
-                  ),
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.7,
+                  maxWidth: MediaQuery.of(context).size.width * 0.9,
                 ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.black,
-                        height: 1.5,
-                      ),
-                      textAlign: TextAlign.justify,
-                    ),
-                    const SizedBox(height: 20),
-                    // Close button
-                    Align(
-                      alignment: Alignment.center,
-                      child: ElevatedButton.icon(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(
-                          Icons.close,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                        label: const Text(
-                          'Close',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.white,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.contain,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(40.0),
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: const Color(0xFF2E7D32),
                           ),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFFF6B35),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          minimumSize: const Size(100, 36),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        padding: const EdgeInsets.all(40),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Failed to load image',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ),
-                  ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _buildDetailSection(String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF2E7D32),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey[200]!),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailItem(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 13, color: Colors.black54),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -687,24 +1222,3 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 }
-
-// Data models
-class HistoryItem {
-  final String id;
-  final DateTime date;
-  final Duration duration;
-  final String analysis;
-  final int confidence;
-  final AnalysisStatus status;
-
-  HistoryItem({
-    required this.id,
-    required this.date,
-    required this.duration,
-    required this.analysis,
-    required this.confidence,
-    required this.status,
-  });
-}
-
-enum AnalysisStatus { completed, lowConfidence, failed }

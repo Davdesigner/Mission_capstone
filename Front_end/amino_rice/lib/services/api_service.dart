@@ -244,9 +244,10 @@ class ApiService {
   }
 
   /// Get analysis history (if implemented on backend)
-  Future<List<Map<String, dynamic>>?> getHistory() async {
+  /// Get scan history
+  Future<List<Map<String, dynamic>>?> getScanHistory({int limit = 20}) async {
     try {
-      final uri = Uri.parse('$baseUrl/history');
+      final uri = Uri.parse('$baseUrl/scans?limit=$limit');
       final response = await http.get(
         uri,
         headers: _getHeaders(includeAuth: true),
@@ -260,8 +261,56 @@ class ApiService {
         return null;
       }
     } catch (e) {
-      print('Error fetching history: $e');
+      print('Error fetching scan history: $e');
       return null;
     }
+  }
+
+  /// Delete a scan by ID
+  Future<bool> deleteScan(String scanId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/scans/$scanId');
+      final response = await http.delete(
+        uri,
+        headers: _getHeaders(includeAuth: true),
+      );
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        print('Error: ${response.statusCode} - ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('Error deleting scan: $e');
+      return false;
+    }
+  }
+
+  /// Get detailed scan result by ID
+  Future<ScanResult?> getScanDetails(String scanId) async {
+    try {
+      final uri = Uri.parse('$baseUrl/scans/$scanId');
+      final response = await http.get(
+        uri,
+        headers: _getHeaders(includeAuth: true),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonData = json.decode(response.body);
+        return ScanResult.fromJson(jsonData);
+      } else {
+        print('Error: ${response.statusCode} - ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('Error fetching scan details: $e');
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>?> getHistory() async {
+    // Deprecated: Use getScanHistory instead
+    return getScanHistory();
   }
 }
