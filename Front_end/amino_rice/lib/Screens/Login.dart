@@ -353,10 +353,10 @@ class _LoginPageState extends State<LoginPage> {
         if (user != null) {
           await StorageService().saveUserData({
             'id': user.id,
-            'fullName': user.fullName,
+            'full_name': user.fullName,
             'email': user.email,
             'phone': user.phone,
-            'joinDate': user.joinDate?.toIso8601String(),
+            'join_date': user.joinDate,
           });
         }
 

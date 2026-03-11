@@ -3,7 +3,7 @@ class User {
   final String fullName;
   final String email;
   final String? phone;
-  final DateTime? joinDate;
+  final String? joinDate;
   final String? profileImageUrl;
 
   User({
@@ -21,7 +21,7 @@ class User {
       'fullName': fullName,
       'email': email,
       'phone': phone,
-      'joinDate': joinDate?.toIso8601String(),
+      'joinDate': joinDate,
       'profileImageUrl': profileImageUrl,
     };
   }
@@ -32,9 +32,7 @@ class User {
       fullName: json['full_name'] ?? '',
       email: json['email'] ?? '',
       phone: json['phone'],
-      joinDate: json['join_date'] != null
-          ? DateTime.parse(json['join_date'])
-          : null,
+      joinDate: json['join_date'],
       profileImageUrl: json['profile_image_url'],
     );
   }

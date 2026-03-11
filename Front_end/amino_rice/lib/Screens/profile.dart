@@ -35,32 +35,7 @@ class _ProfilePageState extends State<ProfilePage> {
           userName = userData['full_name'] ?? 'N/A';
           userEmail = userData['email'] ?? 'N/A';
           userPhone = userData['phone'] ?? 'Not provided';
-
-          // Format join date if available
-          if (userData['join_date'] != null) {
-            try {
-              final date = DateTime.parse(userData['join_date']);
-              final months = [
-                'January',
-                'February',
-                'March',
-                'April',
-                'May',
-                'June',
-                'July',
-                'August',
-                'September',
-                'October',
-                'November',
-                'December',
-              ];
-              joinDate = '${months[date.month - 1]} ${date.year}';
-            } catch (e) {
-              joinDate = userData['join_date'].toString();
-            }
-          } else {
-            joinDate = 'N/A';
-          }
+          joinDate = userData['join_date'] ?? 'N/A';
 
           isLoading = false;
         });
@@ -96,7 +71,7 @@ class _ProfilePageState extends State<ProfilePage> {
           'full_name': user.fullName,
           'email': user.email,
           'phone': user.phone,
-          'join_date': user.joinDate?.toIso8601String(),
+          'join_date': user.joinDate,
         };
         await StorageService().saveUserData(userMap);
 
@@ -104,32 +79,7 @@ class _ProfilePageState extends State<ProfilePage> {
           userName = user.fullName;
           userEmail = user.email;
           userPhone = user.phone ?? 'Not provided';
-
-          // Format join date
-          if (user.joinDate != null) {
-            try {
-              final date = user.joinDate!;
-              final months = [
-                'January',
-                'February',
-                'March',
-                'April',
-                'May',
-                'June',
-                'July',
-                'August',
-                'September',
-                'October',
-                'November',
-                'December',
-              ];
-              joinDate = '${months[date.month - 1]} ${date.year}';
-            } catch (e) {
-              joinDate = user.joinDate!.toIso8601String();
-            }
-          } else {
-            joinDate = 'N/A';
-          }
+          joinDate = user.joinDate ?? 'N/A';
 
           isLoading = false;
         });
@@ -513,37 +463,325 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _showEditProfileDialog() {
+    final nameController = TextEditingController(text: userName);
+    final phoneController = TextEditingController(
+      text: userPhone == 'Not provided' ? '' : userPhone,
+    );
+
+    // Save reference to the scaffold context
+    final scaffoldContext = context;
+
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text(
-            'Edit Profile',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
-          ),
-          content: const Text(
-            'Profile editing feature will be available soon!',
-            style: TextStyle(color: Colors.black54),
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        bool isSaving = false;
+
+        return StatefulBuilder(
+          builder: (builderContext, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text(
+                'Edit Profile',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
                 ),
               ),
-              child: const Text('OK'),
-            ),
-          ],
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Full Name Field
+                    const Text(
+                      'Full Name',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: nameController,
+                      enabled: !isSaving,
+                      decoration: InputDecoration(
+                        hintText: 'Enter your full name',
+                        prefixIcon: const Icon(
+                          Icons.person_outline,
+                          color: Color(0xFF2E7D32),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.grey),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2E7D32),
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Phone Number Field
+                    const Text(
+                      'Phone Number',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: phoneController,
+                      enabled: !isSaving,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        hintText: 'Enter your phone number',
+                        prefixIcon: const Icon(
+                          Icons.phone_outlined,
+                          color: Color(0xFF2E7D32),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.grey),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: Color(0xFF2E7D32),
+                            width: 2,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Email Field (Read-only)
+                    const Text(
+                      'Email',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: TextEditingController(text: userEmail),
+                      enabled: false,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(
+                          Icons.email_outlined,
+                          color: Colors.grey,
+                        ),
+                        suffixIcon: Tooltip(
+                          message: 'Email cannot be changed',
+                          child: Icon(
+                            Icons.lock_outline,
+                            color: Colors.grey[400],
+                            size: 20,
+                          ),
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Colors.grey),
+                        ),
+                        disabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[100],
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Email cannot be changed for security reasons',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () {
+                          nameController.dispose();
+                          phoneController.dispose();
+                          Navigator.of(dialogContext).pop();
+                        },
+                  child: Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: isSaving ? Colors.grey : Colors.grey[700],
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          // Validate inputs
+                          if (nameController.text.trim().isEmpty) {
+                            ScaffoldMessenger.of(scaffoldContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('Please enter your full name'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                            return;
+                          }
+
+                          setDialogState(() {
+                            isSaving = true;
+                          });
+
+                          try {
+                            print('Updating profile with:');
+                            print('Full Name: ${nameController.text.trim()}');
+                            print('Phone: ${phoneController.text.trim()}');
+
+                            // Call API to update profile
+                            final updatedUser = await ApiService()
+                                .updateProfile(
+                                  fullName: nameController.text.trim(),
+                                  phone: phoneController.text.trim().isEmpty
+                                      ? null
+                                      : phoneController.text.trim(),
+                                );
+
+                            print(
+                              'Updated user received: ${updatedUser?.fullName}',
+                            );
+
+                            if (updatedUser != null) {
+                              // Update local storage
+                              await StorageService().saveUserData({
+                                'id': updatedUser.id,
+                                'full_name': updatedUser.fullName,
+                                'email': updatedUser.email,
+                                'phone': updatedUser.phone,
+                                'join_date': updatedUser.joinDate,
+                              });
+
+                              print('Local storage updated successfully');
+
+                              // Dispose controllers before closing dialog
+                              nameController.dispose();
+                              phoneController.dispose();
+
+                              // Close dialog
+                              Navigator.of(dialogContext).pop();
+
+                              // Update UI in the main screen
+                              if (mounted) {
+                                setState(() {
+                                  userName = updatedUser.fullName;
+                                  userPhone =
+                                      updatedUser.phone ?? 'Not provided';
+                                });
+
+                                print(
+                                  'UI updated - Name: $userName, Phone: $userPhone',
+                                );
+
+                                // Show success message
+                                ScaffoldMessenger.of(
+                                  scaffoldContext,
+                                ).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Profile updated successfully!',
+                                    ),
+                                    backgroundColor: Color(0xFF2E7D32),
+                                    duration: Duration(seconds: 2),
+                                  ),
+                                );
+                              }
+                            } else {
+                              print('ERROR: updatedUser is null');
+                              throw Exception(
+                                'Failed to update profile - no response from server',
+                              );
+                            }
+                          } catch (e) {
+                            print('ERROR updating profile: $e');
+                            // Only update state if dialog is still open
+                            if (Navigator.of(dialogContext).canPop()) {
+                              setDialogState(() {
+                                isSaving = false;
+                              });
+
+                              ScaffoldMessenger.of(
+                                scaffoldContext,
+                              ).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    'Failed to update: ${e.toString()}',
+                                  ),
+                                  backgroundColor: Colors.red,
+                                  duration: const Duration(seconds: 3),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E7D32),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : const Text('Save Changes'),
+                ),
+              ],
+            );
+          },
         );
       },
     );

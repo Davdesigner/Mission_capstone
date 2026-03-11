@@ -160,16 +160,28 @@ class ApiService {
   /// Update user profile
   Future<User?> updateProfile({String? fullName, String? phone}) async {
     try {
-      final uri = Uri.parse('$baseUrl/profile');
-      final body = <String, dynamic>{};
-      if (fullName != null) body['full_name'] = fullName;
-      if (phone != null) body['phone'] = phone;
+      // Build query parameters
+      final queryParams = <String, String>{};
+      if (fullName != null && fullName.isNotEmpty) {
+        queryParams['full_name'] = fullName;
+      }
+      if (phone != null && phone.isNotEmpty) {
+        queryParams['phone'] = phone;
+      }
+
+      final uri = Uri.parse(
+        '$baseUrl/profile',
+      ).replace(queryParameters: queryParams);
+
+      print('Updating profile with params: $queryParams');
 
       final response = await http.put(
         uri,
         headers: _getHeaders(includeAuth: true),
-        body: json.encode(body),
       );
+
+      print('Update profile status: ${response.statusCode}');
+      print('Update profile response: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
