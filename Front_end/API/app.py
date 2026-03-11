@@ -16,30 +16,39 @@ import onnxruntime as ort
 import cloudinary
 import cloudinary.uploader
 import cloudinary.api
+from openai import OpenAI
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # ==================== Configuration ====================
 
 # MongoDB Configuration
-MONGODB_URL = "mongodb+srv://aminostore_db_user:yGwj1LCERsQn34hH@amino01.obxcvq3.mongodb.net/?appName=Amino01"
-DATABASE_NAME = "aminorice_db"
-USERS_COLLECTION = "users"
-SCANS_COLLECTION = "scans"
+MONGODB_URL = os.getenv("MONGODB_URL")
+DATABASE_NAME = os.getenv("DATABASE_NAME", "aminorice_db")
+USERS_COLLECTION = os.getenv("USERS_COLLECTION", "users")
+SCANS_COLLECTION = os.getenv("SCANS_COLLECTION", "scans")
 
 # Cloudinary Configuration
 cloudinary.config(
-    cloud_name="dnkfri0vx",
-    api_key="283989368319466",
-    api_secret="sJLP16-UO5ajcibrwCDongJbTXE"
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
 )
 
 # JWT Configuration
-SECRET_KEY = "your-secret-key-change-this-in-production-2026-aminorice-app"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 10080))  # 7 days
+
+# OpenAI Configuration
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Model Configuration
-MODEL_PATH = "Saved_model/rice_quality.onnx"
-IMG_SIZE = 224
+MODEL_PATH = os.getenv("MODEL_PATH", "Saved_model/rice_quality.onnx")
+IMG_SIZE = int(os.getenv("IMG_SIZE", 224))
 TARGET_COLUMNS = [
     'Count', 'Broken_Count', 'Long_Count', 'Medium_Count',
     'Black_Count', 'Chalky_Count', 'Red_Count', 'Yellow_Count',
@@ -203,6 +212,13 @@ class ScanHistoryItem(BaseModel):
     broken_percentage: float
     defect_percentage: float
     scanned_at: str
+
+class ChatRequest(BaseModel):
+    question: str = Field(..., min_length=1, max_length=500)
+
+class ChatResponse(BaseModel):
+    answer: str
+    timestamp: str
 
 # ==================== Helper Functions ====================
 
@@ -794,6 +810,85 @@ async def delete_scan(
         )
     
     return {"message": "Scan deleted successfully"}
+
+# ==================== Rice Expert Chatbot ====================
+
+@app.post("/chat", response_model=ChatResponse)
+async def rice_expert_chat(
+    chat_request: ChatRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Ask the Rice Expert chatbot a question
+    
+    - **question**: Your question about rice quality, cultivation, processing, etc.
+    
+    Returns an expert answer (maximum 60 words)
+    
+    Requires authentication token
+    """
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an expert assistant specialized in rice.
+
+Your purpose is to help users understand everything related to rice, including:
+
+- Rice quality assessment
+- Grain measurements (length, width, shape)
+- Broken rice percentage
+- Chalkiness
+- Moisture content
+- Milling quality and head rice yield
+- Rice grading standards
+- Rice varieties and characteristics
+- Rice cultivation and harvesting
+- Storage and processing
+- Nutrition and cooking quality
+- Market and export quality standards
+
+When users provide measurements or characteristics, interpret them and explain the likely rice quality level such as:
+Premium Quality
+Good Quality
+Medium Quality
+Fair Quality
+Poor Quality
+
+Explain information clearly so farmers, researchers, buyers, and students can understand.
+
+If the user asks something unrelated to rice or agriculture, politely guide the conversation back to rice-related topics.
+
+IMPORTANT: Your response must not exceed 60 words. Be concise and direct."""
+                },
+                {
+                    "role": "user",
+                    "content": chat_request.question
+                }
+            ],
+            max_tokens=100,
+            temperature=0.7
+        )
+        
+        answer = response.choices[0].message.content
+        
+        # Ensure answer doesn't exceed 60 words
+        words = answer.split()
+        if len(words) > 60:
+            answer = ' '.join(words[:60]) + '...'
+        
+        return ChatResponse(
+            answer=answer,
+            timestamp=datetime.utcnow().isoformat()
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error processing chat request: {str(e)}"
+        )
 
 @app.get("/health")
 async def health_check():

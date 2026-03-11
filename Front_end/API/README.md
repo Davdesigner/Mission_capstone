@@ -14,6 +14,7 @@ FastAPI backend for AminoRice - Rice Quality Assurance Application
 - ✅ **15 Quality Indicators from Images**
 - ✅ **Cloudinary Image Storage** - Permanent cloud storage for scan images
 - ✅ **Scan History & Analytics** - Track and review past predictions
+- ✅ **Rice Expert Chatbot** - AI-powered Q&A using OpenAI GPT-4
 
 ## API Endpoints
 
@@ -367,6 +368,49 @@ Delete a scan from history.
 }
 ```
 
+### Rice Expert Chatbot
+
+#### 11. Ask Rice Expert
+
+```
+POST /chat
+Authorization: Bearer <token>
+```
+
+Ask the AI-powered Rice Expert chatbot questions about rice quality, cultivation, processing, and more.
+
+**Request Body:**
+
+```json
+{
+  "question": "What is the ideal moisture content for storing rice?"
+}
+```
+
+**Response:**
+
+```json
+{
+  "answer": "The ideal moisture content for storing rice is 12-14%. This level prevents mold growth, insect infestation, and maintains grain quality. Below 12% can cause grain breakage, while above 14% increases spoilage risk. Always store in cool, dry conditions.",
+  "timestamp": "2026-03-11T15:30:45.123456"
+}
+```
+
+**Features:**
+
+- Expert knowledge on rice quality, cultivation, processing, storage, and grading
+- Interprets measurements and provides quality assessments
+- Answers limited to 60 words for quick, concise responses
+- Accessible to farmers, researchers, buyers, and students
+
+**Example Questions:**
+
+- "What makes rice chalky?"
+- "How do I improve head rice yield?"
+- "What's the difference between long and medium grain rice?"
+- "How is broken rice percentage calculated?"
+- "What are the export quality standards for rice?"
+
 ## Setup Instructions
 
 ### 1. Install Python Dependencies
@@ -376,27 +420,64 @@ cd Mission_capstone/Front_end/API
 pip install -r requirements.txt
 ```
 
-### 2. MongoDB Connection
+### 2. Environment Variables Setup
 
-The API is already configured to connect to your MongoDB Atlas cluster:
+Create a `.env` file in the API directory by copying the example:
+
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` with your actual credentials:
+
+```env
+# MongoDB Configuration
+MONGODB_URL=your_mongodb_connection_string
+DATABASE_NAME=aminorice_db
+USERS_COLLECTION=users
+SCANS_COLLECTION=scans
+
+# Cloudinary Configuration
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+
+# JWT Configuration
+SECRET_KEY=your-secret-key-change-this-in-production
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=10080
+
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key
+
+# Model Configuration
+MODEL_PATH=Saved_model/rice_quality.onnx
+IMG_SIZE=224
+```
+
+**Important:** Never commit the `.env` file to version control. It's already included in `.gitignore`.
+
+### 3. MongoDB Connection
+
+The API connects to MongoDB Atlas using the connection string in `.env`:
 
 - Database: `aminorice_db`
 - Collections:
   - `users` - User accounts and authentication
   - `scans` - Rice quality scan history and results
 
-### 3. Cloudinary Configuration
+### 4. Cloudinary Configuration
 
 The API uses Cloudinary for cloud-based image storage:
 
 - **Purpose**: Stores uploaded rice grain images permanently
 - **Folder**: `aminorice_scans/`
-- **Configuration**: Already configured in `app.py`
+- **Configuration**: Set credentials in `.env` file
 - **URL Format**: Images are accessible via HTTPS URLs
 
 All scan images are automatically uploaded to Cloudinary when predictions are made.
 
-### 4. Run the API
+### 5. Run the API
 
 ```bash
 uvicorn app:app --reload
@@ -404,7 +485,7 @@ uvicorn app:app --reload
 
 The API will be available at: `http://localhost:8000`
 
-### 5. Access API Documentation
+### 6. Access API Documentation
 
 FastAPI provides automatic interactive documentation:
 

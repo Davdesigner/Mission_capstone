@@ -200,6 +200,39 @@ def test_scan_details(token, scan_id):
         print(f"[FAILED] Failed to get scan details: {response.json()}")
         return False
 
+def test_chatbot(token):
+    print("\n[TEST] Testing Rice Expert Chatbot...")
+    headers = {"Authorization": f"Bearer {token}"}
+    
+    # Test with a few sample questions
+    test_questions = [
+        "What is the ideal moisture content for storing rice?",
+        "What makes rice chalky?",
+        "How is broken rice percentage calculated?"
+    ]
+    
+    for i, question in enumerate(test_questions, 1):
+        print(f"\n  Question {i}: {question}")
+        chat_data = {"question": question}
+        
+        response = requests.post(f"{BASE_URL}/chat", headers=headers, json=chat_data)
+        
+        if response.status_code == 200:
+            data = response.json()
+            answer = data['answer']
+            word_count = len(answer.split())
+            print(f"  Answer ({word_count} words): {answer}")
+            print(f"  Timestamp: {data['timestamp']}")
+            
+            if i < len(test_questions):  # Don't print separator after last question
+                print()
+        else:
+            print(f"  [FAILED] Chatbot request failed: {response.json()}")
+            return False
+    
+    print(f"\n[SUCCESS] Chatbot test completed")
+    return True
+
 def main():
     print("=" * 60)
     print("AminoRice API Test Suite")
@@ -269,6 +302,9 @@ def main():
             # Test 10: Get scan details
             if scan_id:
                 test_scan_details(token, scan_id)
+        
+        # Test 11: Rice Expert Chatbot
+        test_chatbot(token)
         
         print("\n" + "=" * 60)
         print("[SUCCESS] All tests completed successfully!")
