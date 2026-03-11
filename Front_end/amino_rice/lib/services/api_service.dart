@@ -313,4 +313,30 @@ class ApiService {
     // Deprecated: Use getScanHistory instead
     return getScanHistory();
   }
+
+  /// Chat with Rice Expert AI
+  Future<String?> chatWithExpert(String question) async {
+    try {
+      final uri = Uri.parse('$baseUrl/chat');
+      final response = await http.post(
+        uri,
+        headers: _getHeaders(includeAuth: true),
+        body: json.encode({'question': question}),
+      );
+
+      print('Chat API Status Code: ${response.statusCode}');
+      print('Chat API Response: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['answer'] as String?;
+      } else {
+        print('Error: ${response.statusCode} - ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('Error chatting with expert: $e');
+      return null;
+    }
+  }
 }

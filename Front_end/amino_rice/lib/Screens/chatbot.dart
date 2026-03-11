@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/main_navbar.dart';
+import '../services/api_service.dart';
 import 'login.dart';
 import 'scanning.dart';
 import 'history.dart';
@@ -15,20 +16,33 @@ class ChatbotScreen extends StatefulWidget {
 class _ChatbotScreenState extends State<ChatbotScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _messageController = TextEditingController();
-  final List<ChatMessage> _messages = [];
 
-  void _sendMessage() {
-    if (_messageController.text.trim().isEmpty) return;
+  // Static list to persist messages across screen instances
+  static final List<ChatMessage> _persistentMessages = [];
 
+  final ApiService _apiService = ApiService();
+  bool _isWaitingForResponse = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Messages are already in _persistentMessages, no need to copy
+  }
+
+  void _sendMessage() async {
+    if (_messageController.text.trim().isEmpty || _isWaitingForResponse) return;
+
+    final userQuestion = _messageController.text;
     final newMessage = ChatMessage(
-      text: _messageController.text,
+      text: userQuestion,
       isUser: true,
       timestamp: DateTime.now(),
       isRead: false,
     );
 
     setState(() {
-      _messages.add(newMessage);
+      _persistentMessages.add(newMessage);
+      _isWaitingForResponse = true;
     });
 
     _messageController.clear();
@@ -42,22 +56,40 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       }
     });
 
-    // TODO: Add chatbot response logic here
-    // Simulate bot response
-    Future.delayed(const Duration(seconds: 2), () {
+    // Get actual AI response from API
+    try {
+      final answer = await _apiService.chatWithExpert(userQuestion);
+
       if (mounted) {
         setState(() {
-          _messages.add(
+          _persistentMessages.add(
             ChatMessage(
-              text: "Thanks for your message! I'm here to help.",
+              text:
+                  answer ??
+                  "I apologize, but I'm having trouble connecting right now. Please try again.",
               isUser: false,
               timestamp: DateTime.now(),
               isRead: true,
             ),
           );
+          _isWaitingForResponse = false;
         });
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _persistentMessages.add(
+            ChatMessage(
+              text: "Sorry, I encountered an error. Please try again.",
+              isUser: false,
+              timestamp: DateTime.now(),
+              isRead: true,
+            ),
+          );
+          _isWaitingForResponse = false;
+        });
+      }
+    }
   }
 
   String _formatTime(DateTime timestamp) {
@@ -93,7 +125,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             ElevatedButton(
               onPressed: () {
                 setState(() {
-                  _messages.clear();
+                  _persistentMessages.clear();
                 });
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -216,7 +248,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
         children: [
           // Messages list
           Expanded(
-            child: _messages.isEmpty
+            child: _persistentMessages.isEmpty
                 ? Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -239,9 +271,16 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
+                    itemCount:
+                        _persistentMessages.length +
+                        (_isWaitingForResponse ? 1 : 0),
                     itemBuilder: (context, index) {
-                      return _buildMessageBubble(_messages[index]);
+                      if (index < _persistentMessages.length) {
+                        return _buildMessageBubble(_persistentMessages[index]);
+                      } else {
+                        // Show typing indicator
+                        return _buildTypingIndicator();
+                      }
                     },
                   ),
           ),
@@ -264,8 +303,11 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    enabled: !_isWaitingForResponse,
                     decoration: InputDecoration(
-                      hintText: 'Type a message...',
+                      hintText: _isWaitingForResponse
+                          ? 'Waiting for response...'
+                          : 'Type a message...',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(25),
                         borderSide: BorderSide(color: Colors.grey[300]!),
@@ -281,6 +323,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                           width: 2,
                         ),
                       ),
+                      disabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(25),
+                        borderSide: BorderSide(color: Colors.grey[200]!),
+                      ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 20,
                         vertical: 12,
@@ -291,10 +337,23 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                 ),
                 const SizedBox(width: 8),
                 CircleAvatar(
-                  backgroundColor: const Color(0xFF2E7D32),
+                  backgroundColor: _isWaitingForResponse
+                      ? Colors.grey[400]
+                      : const Color(0xFF2E7D32),
                   child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: _sendMessage,
+                    icon: _isWaitingForResponse
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
+                            ),
+                          )
+                        : const Icon(Icons.send, color: Colors.white),
+                    onPressed: _isWaitingForResponse ? null : _sendMessage,
                   ),
                 ),
               ],
@@ -398,6 +457,78 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   void dispose() {
     _messageController.dispose();
     super.dispose();
+  }
+
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Bot profile picture
+          const CircleAvatar(
+            radius: 18,
+            backgroundColor: Color(0xFF66BB6A),
+            child: Icon(Icons.smart_toy, color: Colors.white, size: 20),
+          ),
+          const SizedBox(width: 8),
+          // Typing indicator
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+                bottomLeft: Radius.circular(5),
+                bottomRight: Radius.circular(20),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildTypingDot(0),
+                const SizedBox(width: 4),
+                _buildTypingDot(1),
+                const SizedBox(width: 4),
+                _buildTypingDot(2),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingDot(int index) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      builder: (context, value, child) {
+        final delay = index * 0.2;
+        final animValue = (value - delay).clamp(0.0, 1.0);
+        final opacity = (animValue * 2).clamp(0.3, 1.0);
+
+        return Opacity(
+          opacity: opacity,
+          child: Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Color(0xFF2E7D32),
+              shape: BoxShape.circle,
+            ),
+          ),
+        );
+      },
+      onEnd: () {
+        // Restart animation if still waiting
+        if (mounted && _isWaitingForResponse) {
+          setState(() {});
+        }
+      },
+    );
   }
 
   Widget _buildSideDrawer() {
