@@ -351,12 +351,13 @@ class _LoginPageState extends State<LoginPage> {
         // Get user profile
         final user = await ApiService().getProfile();
         if (user != null) {
+          // Save user data to local storage
           await StorageService().saveUserData({
             'id': user.id,
             'full_name': user.fullName,
             'email': user.email,
             'phone': user.phone,
-            'join_date': user.joinDate,
+            'join_date': user.joinDate, // Already a String
           });
         }
 

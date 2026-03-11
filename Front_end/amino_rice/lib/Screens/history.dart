@@ -446,27 +446,6 @@ class _HistoryPageState extends State<HistoryPage> {
     }
   }
 
-  String _getImageName(String imageUrl) {
-    try {
-      // Extract filename from URL
-      final uri = Uri.parse(imageUrl);
-      final pathSegments = uri.pathSegments;
-      if (pathSegments.isNotEmpty) {
-        String filename = pathSegments.last;
-        // Remove file extension for display
-        if (filename.contains('.')) {
-          filename = filename.substring(0, filename.lastIndexOf('.'));
-        }
-        // Decode URL encoding
-        filename = Uri.decodeComponent(filename);
-        return filename;
-      }
-      return 'Unknown';
-    } catch (e) {
-      return 'Unknown';
-    }
-  }
-
   String _formatDate(String dateTimeString) {
     try {
       final dateTime = DateTime.parse(dateTimeString);

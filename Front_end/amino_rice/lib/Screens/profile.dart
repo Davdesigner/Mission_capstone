@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
-import '../models/user.dart';
 import 'login.dart';
 
 class ProfilePage extends StatefulWidget {
