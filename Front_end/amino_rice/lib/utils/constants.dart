@@ -9,8 +9,9 @@ class AppConstants {
       'AI-powered rice quality assessment application';
 
   // API Configuration
-  // Use 10.0.2.2 for Android emulator, 127.0.0.1 for iOS simulator
-  static const String apiBaseUrl = 'http://10.0.2.2:8000';
+  // Using hosted API endpoint
+  static const String apiBaseUrl =
+      'https://mission-capstone-1-hyqa.onrender.com';
   static const Duration apiTimeout = Duration(seconds: 30);
 
   // Colors

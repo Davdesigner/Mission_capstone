@@ -8,9 +8,8 @@ import '../models/user.dart';
 
 class ApiService {
   // Base URL for the API
-  // Use 10.0.2.2 for Android emulator to access host machine's localhost
-  // Use 127.0.0.1 for iOS simulator or real device on same network
-  static const String baseUrl = 'http://10.0.2.2:8000';
+  // Using hosted API endpoint
+  static const String baseUrl = 'https://mission-capstone-1-hyqa.onrender.com';
 
   // Singleton pattern
   static final ApiService _instance = ApiService._internal();
