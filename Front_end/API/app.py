@@ -57,6 +57,8 @@ PT_MODEL_PATH = os.getenv(
     "PT_MODEL_PATH",
     "Saved_model/Final_Best_model.pt"
 )
+GDRIVE_ONNX_ID = os.getenv("GDRIVE_ONNX_ID")
+GDRIVE_PT_ID   = os.getenv("GDRIVE_PT_ID")
 
 # ── Image size expected by the model ─────────────────────────────────────────
 IMG_H = 640
@@ -206,6 +208,48 @@ def load_target_transform(pt_path: str):
         return None, []
 
 
+def _file_size_mb(path: str) -> float:
+    try:
+        return os.path.getsize(path) / (1024 * 1024)
+    except Exception:
+        return 0.0
+
+
+def ensure_model_file(local_path: str, gdrive_file_id: Optional[str], display_name: str) -> bool:
+    """
+    Ensure model file exists locally, downloading from Google Drive if needed.
+    """
+    if os.path.exists(local_path):
+        print(f"✅ {display_name} already present ({_file_size_mb(local_path):.1f} MB) → {local_path}")
+        return True
+
+    if not gdrive_file_id:
+        print(f"⚠  {display_name} missing and no Google Drive ID provided")
+        print(f"   Set env var for file ID to download into {local_path}")
+        return False
+
+    try:
+        import gdown
+    except ImportError:
+        print("⚠  gdown is not installed — cannot download model files from Google Drive")
+        return False
+
+    os.makedirs(os.path.dirname(local_path) or ".", exist_ok=True)
+
+    try:
+        print(f"⬇  Downloading {display_name} from Google Drive ...")
+        gdrive_url = f"https://drive.google.com/uc?id={gdrive_file_id}"
+        out_path = gdown.download(url=gdrive_url, output=local_path, quiet=False, fuzzy=True)
+        if out_path is None or not os.path.exists(local_path):
+            print(f"❌ Failed to download {display_name}")
+            return False
+        print(f"✅ {display_name} downloaded ({_file_size_mb(local_path):.1f} MB) → {local_path}")
+        return True
+    except Exception as e:
+        print(f"❌ Error downloading {display_name}: {e}")
+        return False
+
+
 # =============================================================================
 #  STARTUP / SHUTDOWN
 # =============================================================================
@@ -221,6 +265,10 @@ async def startup():
         print("✅ MongoDB connected")
     except Exception as e:
         print(f"❌ MongoDB connection error: {e}")
+
+    # ── Ensure local model files (download from Drive on first boot) ─────────
+    ensure_model_file(ONNX_MODEL_PATH, GDRIVE_ONNX_ID, "Final_Best_model.onnx")
+    ensure_model_file(PT_MODEL_PATH, GDRIVE_PT_ID, "Final_Best_model.pt")
 
     # ── ONNX model ────────────────────────────────────────────────────────────
     print(f"\nLoading ONNX model from: {ONNX_MODEL_PATH}")
