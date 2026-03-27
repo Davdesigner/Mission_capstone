@@ -46,3 +46,8 @@ logs/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Models
+*.pt
+*.onnx
+Saved_model/
