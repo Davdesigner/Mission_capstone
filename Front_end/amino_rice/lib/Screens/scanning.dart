@@ -1410,7 +1410,7 @@ class _ScanResultPopupState extends State<_ScanResultPopup>
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text('Ask AI'),
+                        child: const Text('More Detail'),
                       ),
                     ),
                     const SizedBox(width: 8),
