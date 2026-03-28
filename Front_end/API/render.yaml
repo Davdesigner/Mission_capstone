@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: amino-rice-api
+    env: python
+    rootDir: Front_end/API
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: MODEL_PATH
+        value: Saved_model/Final_Best_model.onnx
+      - key: GDRIVE_ONNX_ID
+        value: 11xiFGrSb-ZBr4YqfS9UuTaDlHaY3r9Uq
+      - key: MONGODB_URL
+        sync: false
+      - key: DATABASE_NAME
+        value: aminorice_db
+      - key: USERS_COLLECTION
+        value: users
+      - key: SCANS_COLLECTION
+        value: scans
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "10080"
+      - key: OPENAI_API_KEY
+        sync: false

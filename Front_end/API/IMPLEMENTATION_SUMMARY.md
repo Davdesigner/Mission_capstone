@@ -9,7 +9,7 @@
 A complete FastAPI endpoint that:
 
 - ✅ Accepts uploaded rice grain images (JPEG/PNG)
-- ✅ Loads and uses PyTorch model (`rice_quality_best.pt`)
+- ✅ Loads and uses ONNX model (`Final_Best_model.onnx`)
 - ✅ Preprocesses images with proper normalization
 - ✅ Generates 15 numerical predictions
 - ✅ Calculates derived quality indicators
@@ -20,7 +20,7 @@ A complete FastAPI endpoint that:
 
 ### 2. Model Integration
 
-**Model Selected**: `Saved_model/rice_quality_best.pt` (PyTorch)
+**Model Selected**: `Saved_model/Final_Best_model.onnx` (ONNX Runtime)
 
 **Preprocessing Pipeline**:
 
@@ -147,7 +147,7 @@ Implemented three-section response format:
 | **example_client.py**         | Python client example        |
 | **IMPLEMENTATION_SUMMARY.md** | This file                    |
 
-##  How to Use
+## How to Use
 
 ### 1. Install Dependencies
 
@@ -168,7 +168,7 @@ pip install -r requirements.txt
 Ensure the model file exists:
 
 ```
-Front_end/API/Saved_model/rice_quality_best.pt
+Front_end/API/Saved_model/Final_Best_model.onnx
 ```
 
 ### 3. Start the API Server
@@ -272,7 +272,7 @@ Visit the auto-generated interactive docs:
 }
 ```
 
-##  Key Features
+## Key Features
 
 ### Authentication
 
@@ -306,7 +306,7 @@ Visit the auto-generated interactive docs:
 - Model availability checking
 - Image validation
 
-##  Testing
+## Testing
 
 ### Test Files Included
 
@@ -344,13 +344,13 @@ Scan ID: 65f1234567890abcdef
    Defective Grain %: 8.77%
 ```
 
-##  Configuration
+## Configuration
 
 ### Model Settings
 
 ```python
-MODEL_PATH = "Saved_model/rice_quality_best.pt"
-IMG_SIZE = 224
+MODEL_PATH = "Saved_model/Final_Best_model.onnx"
+IMG_SIZE = 640
 ```
 
 ### API Settings
@@ -373,12 +373,12 @@ DATABASE_NAME = "aminorice_db"
 CLOUDINARY_URL = "cloudinary://..."
 ```
 
-##  Troubleshooting
+## Troubleshooting
 
 ### Model Not Loading
 
-- Check file exists: `Saved_model/rice_quality_best.pt`
-- Verify PyTorch installed: `pip list | grep torch`
+- Check file exists: `Saved_model/Final_Best_model.onnx`
+- Verify ONNX Runtime installed: `pip list | grep onnxruntime`
 - Check API logs for detailed error
 
 ### Import Errors
@@ -398,15 +398,15 @@ CLOUDINARY_URL = "cloudinary://..."
 - Verify network access
 - Check credentials
 
-##  Notes
+## Notes
 
-1. **Model Choice**: Using `rice_quality_best.pt` (PyTorch) - the "best" model available
-2. **Alternative**: `rice_quality.onnx` also available but not used (would require onnxruntime)
+1. **Model Choice**: Using `Final_Best_model.onnx` (ONNX Runtime) as the runtime artifact
+2. **Deployment Benefit**: No PyTorch checkpoint dependency required on the API server
 3. **Preprocessing**: Uses ImageNet normalization (standard for transfer learning)
 4. **Response Format**: Structured in 3 sections as requested
 5. **Quality Rules**: Implemented detailed 5-tier classification system
 
-##  Success Criteria
+## Success Criteria
 
 ✅ Model loads and runs successfully
 ✅ API accepts image uploads
@@ -420,7 +420,7 @@ CLOUDINARY_URL = "cloudinary://..."
 ✅ Example code included
 ✅ Test suite updated
 
-##  Additional Resources
+## Additional Resources
 
 - API Documentation: http://localhost:8000/docs
 - Detailed Guide: `PREDICTION_API_GUIDE.md`
@@ -428,7 +428,7 @@ CLOUDINARY_URL = "cloudinary://..."
 - Test Suite: `test_api.py`
 - Main README: `README.md`
 
-##  Next Steps
+## Next Steps
 
 1. Install dependencies: `pip install -r requirements.txt`
 2. Start server: `uvicorn app:app --reload`
@@ -439,6 +439,6 @@ CLOUDINARY_URL = "cloudinary://..."
 ---
 
 **Implementation Date**: March 10, 2026
-**Model Used**: PyTorch (`rice_quality_best.pt`)
+**Model Used**: ONNX Runtime (`Final_Best_model.onnx`)
 **API Framework**: FastAPI
 **Python Version**: 3.8+

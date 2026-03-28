@@ -234,11 +234,11 @@ The API classifies rice into five quality categories based on broken grain perce
 
 **Model Information:**
 
-- Architecture: PyTorch Deep Learning Model
-- Model File: `rice_quality_best.pt`
-- Input: 224×224 RGB images
+- Architecture: ConvNeXtV2-Nano exported to ONNX
+- Model File: `Final_Best_model.onnx`
+- Input: 640×640 RGB images
 - Training: Labeled rice grain dataset
-- Output: 15 continuous numerical predictions
+- Output: 16 numerical predictions (including `comment_encoded`)
 
 #### 7. Health Check
 
@@ -451,8 +451,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES=10080
 OPENAI_API_KEY=your_openai_api_key
 
 # Model Configuration
-MODEL_PATH=Saved_model/rice_quality.onnx
-IMG_SIZE=224
+MODEL_PATH=Saved_model/Final_Best_model.onnx
+GDRIVE_ONNX_ID=11xiFGrSb-ZBr4YqfS9UuTaDlHaY3r9Uq
 ```
 
 **Important:** Never commit the `.env` file to version control. It's already included in `.gitignore`.
@@ -484,6 +484,19 @@ uvicorn app:app --reload
 ```
 
 The API will be available at: `http://localhost:8000`
+
+## Deploy on Render
+
+Use Render (not Vercel) with this API directory as the service root.
+
+1. Push the repository to GitHub.
+2. In Render, create a **Web Service** from the repo.
+3. Set **Root Directory** to `Front_end/API`.
+4. Set **Build Command** to `pip install -r requirements.txt`.
+5. Set **Start Command** to `uvicorn app:app --host 0.0.0.0 --port $PORT`.
+6. Add environment variables from `.env` (do not commit secrets).
+
+Optional: use the included `render.yaml` blueprint in `Front_end/API` for one-click setup.
 
 ### 6. Access API Documentation
 

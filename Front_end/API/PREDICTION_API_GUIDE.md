@@ -11,7 +11,7 @@ The `/predict` endpoint accepts an image of rice grains and returns comprehensiv
 
 ## Model Information
 
-- **Model Used**: PyTorch model (`rice_quality_best.pt`)
+- **Model Used**: ONNX model (`Final_Best_model.onnx`)
 - **Input**: 224×224 RGB image
 - **Output**: 15 numerical predictions
 - **Preprocessing**: ResNet/ImageNet normalization (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -308,4 +308,4 @@ For issues or questions:
 
 1. Check health endpoint: `GET /health`
 2. Review API logs for detailed error messages
-3. Ensure model file exists at `Saved_model/rice_quality_best.pt`
+3. Ensure model file exists at `Saved_model/Final_Best_model.onnx`

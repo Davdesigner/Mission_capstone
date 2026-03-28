@@ -45,20 +45,12 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 openai_client  = OpenAI(api_key=OPENAI_API_KEY)
 
 # ── Model paths ───────────────────────────────────────────────────────────────
-#  ONNX  → used for fast inference (two inputs: image + comment)
-#  PT    → used only at startup to load the TargetTransform stats for
-#           inverse-transforming the model's normalised outputs back to
-#           real-world units (grain counts, mm, CIE-Lab values).
+# ONNX is the only model artifact required at runtime.
 ONNX_MODEL_PATH = os.getenv(
     "MODEL_PATH",
     "Saved_model/Final_Best_model.onnx"
 )
-PT_MODEL_PATH = os.getenv(
-    "PT_MODEL_PATH",
-    "Saved_model/Final_Best_model.pt"
-)
 GDRIVE_ONNX_ID = os.getenv("GDRIVE_ONNX_ID")
-GDRIVE_PT_ID   = os.getenv("GDRIVE_PT_ID")
 
 # ── Image size expected by the model ─────────────────────────────────────────
 IMG_H = 640
@@ -119,93 +111,10 @@ async def get_database():
 #  GLOBAL MODEL STATE
 # =============================================================================
 
-# onnx_session     : InferenceSession — runs predictions
-# target_transform : TargetTransform reconstructed from .pt checkpoint
-# output_targets   : ordered target names used to map ONNX output indexes
-onnx_session     = None
-target_transform = None
-output_targets   = ALL_TARGETS.copy()
-
-# =============================================================================
-#  TARGET INVERSE-TRANSFORM
-#  Mirrors the TargetTransform.inverse_transform() in the training script.
-#  The ONNX model outputs z-scored / log-transformed values.  We must undo
-#  that to get real grain counts and measurements.
-# =============================================================================
-
-class TargetTransform:
-    """
-    Runtime reconstruction of the training TargetTransform used for
-    de-normalising ONNX model outputs back to real-world values.
-    """
-
-    def __init__(self):
-        self.targets = []
-        self.is_count = {}
-        self.p99 = {}
-        self.mean_ = {}
-        self.std_ = {}
-
-    def load_state_dict(self, state_dict: dict):
-        self.targets = list(state_dict.get("targets", []))
-        self.is_count = dict(state_dict.get("is_count", {}))
-        self.p99 = dict(state_dict.get("p99", {}))
-        self.mean_ = dict(state_dict.get("mean_", {}))
-        self.std_ = dict(state_dict.get("std_", {}))
-        return self
-
-    def inverse_transform(self, raw_array: np.ndarray) -> dict:
-        result = {}
-        for i, t in enumerate(self.targets):
-            if i >= len(raw_array):
-                break
-            mean_val = float(self.mean_.get(t, 0.0))
-            std_val = float(self.std_.get(t, 1.0))
-            v = float(raw_array[i]) * std_val + mean_val
-            if self.is_count.get(t, False):
-                # Undo log1p applied to count targets in training.
-                v = float(np.clip(np.expm1(v), 0.0, None))
-            result[t] = v
-        return result
-
-
-def load_target_transform(pt_path: str):
-    """
-    Load checkpoint with full pickle support and reconstruct TargetTransform
-    exactly from saved state_dict fields.
-    """
-    try:
-        import torch
-
-        ckpt = torch.load(pt_path, map_location="cpu", weights_only=False)
-        if not isinstance(ckpt, dict):
-            print("⚠  Unexpected checkpoint format — inverse transform disabled")
-            return None, []
-
-        transform_state = ckpt.get("target_transform")
-        checkpoint_targets = ckpt.get("targets", [])
-
-        if transform_state is None:
-            print("⚠  'target_transform' key not found in .pt — inverse transform disabled")
-            return None, list(checkpoint_targets)
-
-        transform = TargetTransform().load_state_dict(transform_state)
-        if checkpoint_targets and not transform.targets:
-            transform.targets = list(checkpoint_targets)
-
-        if not transform.targets:
-            print("⚠  No targets found in checkpoint transform — inverse transform disabled")
-            return None, []
-
-        print(f"  ✅ TargetTransform loaded  ({len(transform.targets)} targets)")
-        return transform, list(transform.targets)
-
-    except ImportError:
-        print("⚠  torch not installed — cannot load transform stats from .pt")
-        return None, []
-    except Exception as e:
-        print(f"⚠  Could not load .pt for transform stats: {e}")
-        return None, []
+# onnx_session   : InferenceSession — runs predictions
+# output_targets : ordered target names used to map ONNX output indexes
+onnx_session   = None
+output_targets = ALL_TARGETS.copy()
 
 
 def _file_size_mb(path: str) -> float:
@@ -256,7 +165,7 @@ def ensure_model_file(local_path: str, gdrive_file_id: Optional[str], display_na
 
 @app.on_event("startup")
 async def startup():
-    global onnx_session, target_transform, output_targets
+    global onnx_session, output_targets
 
     # ── MongoDB ───────────────────────────────────────────────────────────────
     mongodb.client = AsyncIOMotorClient(MONGODB_URL)
@@ -266,9 +175,8 @@ async def startup():
     except Exception as e:
         print(f"❌ MongoDB connection error: {e}")
 
-    # ── Ensure local model files (download from Drive on first boot) ─────────
+    # ── Ensure local ONNX model file (download from Drive on first boot) ─────
     ensure_model_file(ONNX_MODEL_PATH, GDRIVE_ONNX_ID, "Final_Best_model.onnx")
-    ensure_model_file(PT_MODEL_PATH, GDRIVE_PT_ID, "Final_Best_model.pt")
 
     # ── ONNX model ────────────────────────────────────────────────────────────
     print(f"\nLoading ONNX model from: {ONNX_MODEL_PATH}")
@@ -293,15 +201,8 @@ async def startup():
         except Exception as e:
             print(f"❌ Failed to load ONNX model: {e}")
 
-    # ── Target transform stats (.pt) ─────────────────────────────────────────
-    print(f"\nLoading transform stats from: {PT_MODEL_PATH}")
-    if os.path.exists(PT_MODEL_PATH):
-        target_transform, loaded_targets = load_target_transform(PT_MODEL_PATH)
-        if loaded_targets:
-            output_targets = loaded_targets
-    else:
-        print(f"⚠  .pt file not found at {os.path.abspath(PT_MODEL_PATH)}")
-        print("   Predictions will be returned as raw normalised values.")
+    # ONNX model emits 16 targets in ALL_TARGETS order.
+    output_targets = ALL_TARGETS.copy()
 
 
 @app.on_event("shutdown")
@@ -695,13 +596,9 @@ async def predict_rice_quality(
         # ── ONNX inference ────────────────────────────────────────────────────
         raw_output = run_onnx_inference(image_array, comment_idx)  # [16] normalised
 
-        # ── Inverse-transform back to real units ──────────────────────────────
-        if target_transform is not None:
-            preds = target_transform.inverse_transform(raw_output)
-        else:
-            # Fallback: use raw values (z-scored) — warn in response
-            keys = output_targets if len(output_targets) == len(raw_output) else ALL_TARGETS[:len(raw_output)]
-            preds = {keys[i]: float(raw_output[i]) for i in range(len(keys))}
+        # Map raw ONNX outputs to target names.
+        keys = output_targets if len(output_targets) == len(raw_output) else ALL_TARGETS[:len(raw_output)]
+        preds = {keys[i]: float(raw_output[i]) for i in range(len(keys))}
 
         # ── Ensure non-negative counts ────────────────────────────────────────
         for t in COUNT_TARGETS:
@@ -985,7 +882,6 @@ async def health_check():
         "status"          : "healthy",
         "database"        : db_status,
         "onnx_model"      : "loaded" if onnx_session      is not None else "not loaded",
-        "transform_stats" : "loaded" if target_transform  is not None else "not loaded (raw outputs)",
         "model_info"      : {
             "architecture": "ConvNeXtV2-Nano + Comment Embedding",
             "num_targets" : len(output_targets),
