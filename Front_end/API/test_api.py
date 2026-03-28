@@ -7,7 +7,7 @@ import requests
 import json
 import os
 
-BASE_URL = "https://mission-capstone-1-hyqa.onrender.com"
+BASE_URL = "https://mission-capstone-kj09.onrender.com"
 
 def test_root():
     print("\n[TEST] Testing Root Endpoint...")
