@@ -3,11 +3,11 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
 import '../widgets/main_navbar.dart';
 import 'chatbot.dart';
-import 'login.dart';
 import 'scanning.dart';
 import 'profile.dart';
 import '../services/api_service.dart';
 import '../models/scan_result.dart';
+import '../utils/logout_helper.dart';
 
 // Data model for scan history items
 class ScanHistoryItem {
@@ -38,6 +38,953 @@ class ScanHistoryItem {
       brokenPercentage: (json['broken_percentage'] ?? 0).toDouble(),
       defectPercentage: (json['defect_percentage'] ?? 0).toDouble(),
       scannedAt: json['scanned_at'] ?? '',
+    );
+  }
+}
+
+class _HistoryScanResultPopup extends StatefulWidget {
+  const _HistoryScanResultPopup({
+    required this.result,
+    required this.onViewImage,
+  });
+
+  final ScanResult result;
+  final void Function(String imageUrl) onViewImage;
+
+  @override
+  State<_HistoryScanResultPopup> createState() =>
+      _HistoryScanResultPopupState();
+}
+
+class _HistoryScanResultPopupState extends State<_HistoryScanResultPopup>
+    with SingleTickerProviderStateMixin {
+  static const Color _primaryGreen = Color(0xFF2E7D32);
+  static const Color _secondaryGreen = Color(0xFF66BB6A);
+
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final result = widget.result;
+    final totalGrains = result.grainCharacteristics.totalGrains;
+    final brokenGrains = result.grainCharacteristics.brokenGrains;
+    final longGrains = result.grainCharacteristics.longGrains;
+    final mediumGrains = result.grainCharacteristics.mediumGrains;
+    final defects = <String, double>{
+      'Black': result.defectiveGrains.blackGrains,
+      'Chalky': result.defectiveGrains.chalkyGrains,
+      'Red': result.defectiveGrains.redGrains,
+      'Yellow': result.defectiveGrains.yellowGrains,
+      'Green': result.defectiveGrains.greenGrains,
+    };
+    final totalDefective = result.defectiveGrains.totalDefective;
+    final brokenPct = totalGrains > 0
+        ? (brokenGrains / totalGrains) * 100
+        : result.conclusion.brokenGrainPercentage;
+    final defectPct = totalGrains > 0
+        ? (totalDefective / totalGrains) * 100
+        : result.conclusion.defectiveGrainPercentage;
+    final qualityColor = _getQualityColor(
+      result.conclusion.overallQualityCategory,
+    );
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
+      backgroundColor: Colors.transparent,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.88,
+          maxWidth: 470,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF4FBF5),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: _secondaryGreen.withOpacity(0.25)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.18),
+              blurRadius: 24,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            _HistoryReveal(
+              animation: _animationFor(0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_primaryGreen, _secondaryGreen],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const Expanded(
+                          child: Text(
+                            'Scan results',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  color: qualityColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                'History',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      result.conclusion.overallQualityCategory,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 27,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      result.conclusion.qualityDescription,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _scorePill(
+                          '${brokenPct.toStringAsFixed(1)}%',
+                          'Broken',
+                        ),
+                        const SizedBox(width: 8),
+                        _scorePill(
+                          '${defectPct.toStringAsFixed(1)}%',
+                          'Defective',
+                        ),
+                        const SizedBox(width: 8),
+                        _scorePill(_formatCount(totalGrains), 'Total'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _HistoryReveal(
+                      animation: _animationFor(1),
+                      child: const _HistorySectionLabel(
+                        'Grain count breakdown',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _HistoryReveal(
+                      animation: _animationFor(2),
+                      child: GridView.count(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        childAspectRatio: 1.42,
+                        children: [
+                          _metricCard(
+                            label: 'Total count',
+                            value: _formatCount(totalGrains),
+                            subtitle: 'grains detected',
+                            progress: 1,
+                            progressColor: _secondaryGreen,
+                          ),
+                          _metricCard(
+                            label: 'Broken',
+                            value: _formatCount(brokenGrains),
+                            subtitle:
+                                '${brokenPct.toStringAsFixed(1)}% of total',
+                            progress: (brokenPct / 100)
+                                .clamp(0.0, 1.0)
+                                .toDouble(),
+                            progressColor: const Color(0xFFD84343),
+                          ),
+                          _metricCard(
+                            label: 'Long grains',
+                            value: _formatCount(longGrains),
+                            subtitle:
+                                '${_safePercentage(longGrains, totalGrains).toStringAsFixed(1)}% of total',
+                            progress:
+                                (totalGrains > 0 ? longGrains / totalGrains : 0)
+                                    .clamp(0.0, 1.0)
+                                    .toDouble(),
+                            progressColor: _primaryGreen,
+                          ),
+                          _metricCard(
+                            label: 'Medium grains',
+                            value: _formatCount(mediumGrains),
+                            subtitle:
+                                '${_safePercentage(mediumGrains, totalGrains).toStringAsFixed(1)}% of total',
+                            progress:
+                                (totalGrains > 0
+                                        ? mediumGrains / totalGrains
+                                        : 0)
+                                    .clamp(0.0, 1.0)
+                                    .toDouble(),
+                            progressColor: const Color(0xFF8EBF61),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _HistoryReveal(
+                      animation: _animationFor(3),
+                      child: const _HistorySectionLabel('Defective grains'),
+                    ),
+                    const SizedBox(height: 8),
+                    _HistoryReveal(
+                      animation: _animationFor(4),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: _cardDecoration(),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Defect analysis',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1B4332),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE9F7EA),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${_formatCount(totalDefective)} defective',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: _primaryGreen,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            ...defects.entries.map(
+                              (entry) => Padding(
+                                padding: const EdgeInsets.only(bottom: 9),
+                                child: _defectRow(
+                                  name: entry.key,
+                                  count: entry.value,
+                                  totalGrains: totalGrains,
+                                  totalDefects: totalDefective,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _HistoryReveal(
+                      animation: _animationFor(5),
+                      child: const _HistorySectionLabel('Grain measurements'),
+                    ),
+                    const SizedBox(height: 8),
+                    _HistoryReveal(
+                      animation: _animationFor(6),
+                      child: Container(
+                        decoration: _cardDecoration(),
+                        child: Column(
+                          children: [
+                            _measureRow(
+                              'Average length',
+                              result.grainMeasurements.averageLength
+                                  .toStringAsFixed(3),
+                              'mm',
+                            ),
+                            _measureRow(
+                              'Average width',
+                              result.grainMeasurements.averageWidth
+                                  .toStringAsFixed(3),
+                              'mm',
+                            ),
+                            _measureRow(
+                              'Length / width ratio',
+                              result.grainMeasurements.lengthWidthRatio
+                                  .toStringAsFixed(3),
+                              'ratio',
+                              isLast: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _HistoryReveal(
+                      animation: _animationFor(7),
+                      child: const _HistorySectionLabel(
+                        'Color analysis (CIE Lab)',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _HistoryReveal(
+                      animation: _animationFor(8),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: _cardDecoration(),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: 42,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: _riceSwatchColor(
+                                        result.colorCharacteristics.averageL,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      _resolveRiceType(
+                                        result.colorCharacteristics.averageL,
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF374151),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 2,
+                                  child: Container(
+                                    height: 42,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE8F3EA),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Text(
+                                          'Brightness',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF43614C),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: TweenAnimationBuilder<double>(
+                                            tween: Tween<double>(
+                                              begin: 0,
+                                              end:
+                                                  (result
+                                                              .colorCharacteristics
+                                                              .averageL /
+                                                          100)
+                                                      .clamp(0.0, 1.0)
+                                                      .toDouble(),
+                                            ),
+                                            duration: const Duration(
+                                              milliseconds: 900,
+                                            ),
+                                            curve: Curves.easeOutCubic,
+                                            builder: (context, value, child) {
+                                              return ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                                child: LinearProgressIndicator(
+                                                  value: value,
+                                                  minHeight: 6,
+                                                  backgroundColor: const Color(
+                                                    0xFFCAE5CF,
+                                                  ),
+                                                  color: _primaryGreen,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                _cieBox(
+                                  'L*',
+                                  result.colorCharacteristics.averageL,
+                                ),
+                                const SizedBox(width: 6),
+                                _cieBox(
+                                  'a*',
+                                  result.colorCharacteristics.averageA,
+                                ),
+                                const SizedBox(width: 6),
+                                _cieBox(
+                                  'b*',
+                                  result.colorCharacteristics.averageB,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _HistoryReveal(
+                      animation: _animationFor(9),
+                      child: _infoCard([
+                        _infoRow(
+                          'Sample ID',
+                          result.sampleInformation.sampleId,
+                        ),
+                        _infoRow('Scan ID', result.sampleInformation.scanId),
+                        _infoRow(
+                          'Scanned at',
+                          _formatDateTime(result.sampleInformation.scannedAt),
+                        ),
+                      ]),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _HistoryReveal(
+              animation: _animationFor(10),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          widget.onViewImage(result.sampleInformation.imageUrl);
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _primaryGreen,
+                          side: const BorderSide(color: _primaryGreen),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('View Image'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primaryGreen,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Close'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Animation<double> _animationFor(int index) {
+    final start = (index * 0.08).clamp(0.0, 0.8).toDouble();
+    final end = (start + 0.2).clamp(0.0, 1.0).toDouble();
+    return CurvedAnimation(
+      parent: _controller,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
+  }
+
+  Widget _scorePill(String value, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.85),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _infoCard(List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD6E8D8), width: 0.9),
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _metricCard({
+    required String label,
+    required String value,
+    required String subtitle,
+    required double progress,
+    required Color progressColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF111827),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
+          const Spacer(),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: progress),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: value,
+                  minHeight: 4,
+                  backgroundColor: const Color(0xFFDDEBDF),
+                  color: progressColor,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _defectRow({
+    required String name,
+    required double count,
+    required double totalGrains,
+    required double totalDefects,
+  }) {
+    final defectColor = _defectColor(name);
+    final pctOfTotal = _safePercentage(count, totalGrains);
+    final pctOfDefects = totalDefects > 0 ? count / totalDefects : 0;
+
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: defectColor, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            name,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+          ),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(
+                begin: 0,
+                end: pctOfDefects.clamp(0.0, 1.0).toDouble(),
+              ),
+              duration: const Duration(milliseconds: 850),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return LinearProgressIndicator(
+                  value: value,
+                  minHeight: 5,
+                  backgroundColor: const Color(0xFFDDEBDF),
+                  color: defectColor,
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 36,
+          child: Text(
+            _formatCount(count),
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF111827),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 42,
+          child: Text(
+            '${pctOfTotal.toStringAsFixed(1)}%',
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _measureRow(
+    String title,
+    String value,
+    String unit, {
+    bool isLast = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        border: isLast
+            ? null
+            : const Border(
+                bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.7),
+              ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+          ),
+          RichText(
+            text: TextSpan(
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827),
+              ),
+              children: [
+                TextSpan(text: value),
+                TextSpan(
+                  text: ' $unit',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cieBox(String label, double value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value.toStringAsFixed(1),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFD6E8D8), width: 0.9),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF111827),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDateTime(String dateTimeString) {
+    try {
+      final dateTime = DateTime.parse(dateTimeString);
+      return DateFormat('MMM d, yyyy • h:mm a').format(dateTime);
+    } catch (_) {
+      return 'Unknown';
+    }
+  }
+
+  double _safePercentage(double value, double total) {
+    if (total <= 0) {
+      return 0;
+    }
+    return (value / total) * 100;
+  }
+
+  String _formatCount(double value) {
+    return value.toStringAsFixed(0);
+  }
+
+  Color _getQualityColor(String quality) {
+    final lowerQuality = quality.toLowerCase();
+    if (lowerQuality.contains('premium')) {
+      return const Color(0xFF1B8F4F);
+    }
+    if (lowerQuality.contains('good')) {
+      return _primaryGreen;
+    }
+    if (lowerQuality.contains('medium') || lowerQuality.contains('fair')) {
+      return const Color(0xFFE09F2D);
+    }
+    if (lowerQuality.contains('poor')) {
+      return const Color(0xFFC8473D);
+    }
+    return _secondaryGreen;
+  }
+
+  String _resolveRiceType(double lightness) {
+    if (lightness > 75) {
+      return 'White rice';
+    }
+    if (lightness > 65) {
+      return 'Brown rice';
+    }
+    return 'Paddy rice';
+  }
+
+  Color _riceSwatchColor(double lightness) {
+    if (lightness > 75) {
+      return const Color(0xFFF5F0DC);
+    }
+    if (lightness > 65) {
+      return const Color(0xFFD2B991);
+    }
+    return const Color(0xFFA58250);
+  }
+
+  Color _defectColor(String defectName) {
+    switch (defectName.toLowerCase()) {
+      case 'black':
+        return const Color(0xFF2F4F37);
+      case 'chalky':
+        return const Color(0xFF9DB9A1);
+      case 'red':
+        return const Color(0xFFC8473D);
+      case 'yellow':
+        return const Color(0xFFD1A235);
+      case 'green':
+        return const Color(0xFF4B9F68);
+      default:
+        return _secondaryGreen;
+    }
+  }
+}
+
+class _HistorySectionLabel extends StatelessWidget {
+  const _HistorySectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.9,
+        color: Color(0xFF4B6E54),
+      ),
+    );
+  }
+}
+
+class _HistoryReveal extends StatelessWidget {
+  const _HistoryReveal({required this.animation, required this.child});
+
+  final Animation<double> animation;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, child) {
+        final eased = Curves.easeOutCubic.transform(animation.value);
+        return Opacity(
+          opacity: eased,
+          child: Transform.translate(
+            offset: Offset(0, (1 - eased) * 14),
+            child: child,
+          ),
+        );
+      },
     );
   }
 }
@@ -239,7 +1186,7 @@ class _HistoryPageState extends State<HistoryPage> {
           children: [
             SlidableAction(
               onPressed: (context) => _confirmDelete(item),
-              backgroundColor: Colors.red,
+              backgroundColor: const Color(0xFFC8473D),
               foregroundColor: Colors.white,
               icon: Icons.delete,
               label: 'Delete',
@@ -255,7 +1202,7 @@ class _HistoryPageState extends State<HistoryPage> {
           children: [
             SlidableAction(
               onPressed: (context) => _viewDetails(item),
-              backgroundColor: const Color(0xFF2E7D32),
+              backgroundColor: const Color(0xFF1B8F4F),
               foregroundColor: Colors.white,
               icon: Icons.visibility,
               label: 'View More',
@@ -270,12 +1217,12 @@ class _HistoryPageState extends State<HistoryPage> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey[200]!),
+            border: Border.all(color: const Color(0xFFD8E8DA)),
             boxShadow: [
               BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
+                color: const Color(0xFF2E7D32).withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
@@ -374,7 +1321,18 @@ class _HistoryPageState extends State<HistoryPage> {
               ),
 
               // Swipe indicator
-              Icon(Icons.drag_handle, color: Colors.grey[400], size: 20),
+              Container(
+                width: 6,
+                height: 40,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFB8DCC0), Color(0xFF66BB6A)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
             ],
           ),
         ),
@@ -581,288 +1539,8 @@ class _HistoryPageState extends State<HistoryPage> {
   void _showScanDetailsDialog(ScanResult result) {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.8,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0xFF2E7D32), Color(0xFF66BB6A)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.grain, color: Colors.white, size: 28),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Scan Results',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(Icons.close, color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-                // Scrollable Content
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _buildDetailSection('Sample Information', [
-                          _buildDetailItem(
-                            'Sample ID',
-                            result.sampleInformation.sampleId,
-                          ),
-                          _buildDetailItem(
-                            'Date Scanned',
-                            _formatDate(result.sampleInformation.scannedAt),
-                          ),
-                          _buildDetailItem(
-                            'Time',
-                            _formatTime(result.sampleInformation.scannedAt),
-                          ),
-                        ]),
-                        const SizedBox(height: 16),
-                        _buildDetailSection('Grain Characteristics', [
-                          _buildDetailItem(
-                            'Total Grain Count',
-                            result.grainCharacteristics.totalGrains
-                                .toStringAsFixed(0),
-                          ),
-                          _buildDetailItem(
-                            'Long Grains',
-                            result.grainCharacteristics.longGrains
-                                .toStringAsFixed(0),
-                          ),
-                          _buildDetailItem(
-                            'Medium Grains',
-                            result.grainCharacteristics.mediumGrains
-                                .toStringAsFixed(0),
-                          ),
-                          _buildDetailItem(
-                            'Broken Grains',
-                            result.grainCharacteristics.brokenGrains
-                                .toStringAsFixed(0),
-                          ),
-                          _buildDetailItem(
-                            'Broken Percentage',
-                            '${result.conclusion.brokenGrainPercentage.toStringAsFixed(2)}%',
-                          ),
-                        ]),
-                        const SizedBox(height: 16),
-                        _buildDetailSection('Defective Grains', [
-                          _buildDetailItem(
-                            'Total Defects',
-                            result.defectiveGrains.totalDefective
-                                .toStringAsFixed(0),
-                          ),
-                          _buildDetailItem(
-                            'Black Grains',
-                            result.defectiveGrains.blackGrains.toStringAsFixed(
-                              0,
-                            ),
-                          ),
-                          _buildDetailItem(
-                            'Chalky Grains',
-                            result.defectiveGrains.chalkyGrains.toStringAsFixed(
-                              0,
-                            ),
-                          ),
-                          _buildDetailItem(
-                            'Red Grains',
-                            result.defectiveGrains.redGrains.toStringAsFixed(0),
-                          ),
-                          _buildDetailItem(
-                            'Yellow Grains',
-                            result.defectiveGrains.yellowGrains.toStringAsFixed(
-                              0,
-                            ),
-                          ),
-                          _buildDetailItem(
-                            'Green Grains',
-                            result.defectiveGrains.greenGrains.toStringAsFixed(
-                              0,
-                            ),
-                          ),
-                          _buildDetailItem(
-                            'Defect Percentage',
-                            '${result.conclusion.defectiveGrainPercentage.toStringAsFixed(2)}%',
-                          ),
-                        ]),
-                        const SizedBox(height: 16),
-                        _buildDetailSection('Grain Measurements', [
-                          _buildDetailItem(
-                            'Average Length',
-                            '${result.grainMeasurements.averageLength.toStringAsFixed(2)} mm',
-                          ),
-                          _buildDetailItem(
-                            'Average Width',
-                            '${result.grainMeasurements.averageWidth.toStringAsFixed(2)} mm',
-                          ),
-                          _buildDetailItem(
-                            'Length/Width Ratio',
-                            result.grainMeasurements.lengthWidthRatio
-                                .toStringAsFixed(2),
-                          ),
-                        ]),
-                        const SizedBox(height: 16),
-                        _buildDetailSection('Color Characteristics', [
-                          _buildDetailItem(
-                            'Average L* (Lightness)',
-                            result.colorCharacteristics.averageL
-                                .toStringAsFixed(2),
-                          ),
-                          _buildDetailItem(
-                            'Average a* (Red/Green)',
-                            result.colorCharacteristics.averageA
-                                .toStringAsFixed(2),
-                          ),
-                          _buildDetailItem(
-                            'Average b* (Yellow/Blue)',
-                            result.colorCharacteristics.averageB
-                                .toStringAsFixed(2),
-                          ),
-                        ]),
-                        const SizedBox(height: 16),
-                        _buildDetailSection('Conclusion', [
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: _getQualityColor(
-                                result.conclusion.overallQualityCategory,
-                              ).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _getQualityColor(
-                                  result.conclusion.overallQualityCategory,
-                                ).withOpacity(0.3),
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    const Text(
-                                      'Quality: ',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                    Text(
-                                      result.conclusion.overallQualityCategory,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: _getQualityColor(
-                                          result
-                                              .conclusion
-                                              .overallQualityCategory,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  result.conclusion.qualityDescription,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.black87,
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ]),
-                      ],
-                    ),
-                  ),
-                ),
-                // Bottom buttons
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(20),
-                      bottomRight: Radius.circular(20),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close, size: 18),
-                          label: const Text('Close'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
-                            side: const BorderSide(color: Colors.red),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: () =>
-                              _viewImage(result.sampleInformation.imageUrl),
-                          icon: const Icon(Icons.image, size: 18),
-                          label: const Text('View Image'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2E7D32),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+      builder: (_) =>
+          _HistoryScanResultPopup(result: result, onViewImage: _viewImage),
     );
   }
 
@@ -943,59 +1621,6 @@ class _HistoryPageState extends State<HistoryPage> {
           ),
         );
       },
-    );
-  }
-
-  Widget _buildDetailSection(String title, List<Widget> children) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2E7D32),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.grey[50],
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey[200]!),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: children,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailItem(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1178,13 +1803,9 @@ class _HistoryPageState extends State<HistoryPage> {
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (context) => const LoginPage()),
-                  (route) => false,
-                );
+                await logoutAndNavigateToWelcome(this.context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

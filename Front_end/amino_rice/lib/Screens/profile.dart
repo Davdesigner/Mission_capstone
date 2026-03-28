@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/storage_service.dart';
 import '../services/api_service.dart';
-import 'login.dart';
+import '../utils/logout_helper.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -813,18 +813,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ElevatedButton(
               onPressed: () async {
                 Navigator.of(context).pop();
-
-                // Clear auth data
-                await StorageService().logout();
-                ApiService().clearAuthToken();
-
-                // Navigate to login
-                if (context.mounted) {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (context) => const LoginPage()),
-                    (route) => false,
-                  );
-                }
+                await logoutAndNavigateToWelcome(this.context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

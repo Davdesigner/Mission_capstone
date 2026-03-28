@@ -11,12 +11,96 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  static const Duration _sessionTimeout = Duration(minutes: 10);
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _enforceSessionTimeoutOnLaunch();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _handleAppResumed();
+    }
+
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _saveLastActiveTimestamp();
+    }
+  }
+
+  Future<void> _enforceSessionTimeoutOnLaunch() async {
+    final isLoggedIn = await StorageService().isLoggedIn();
+    if (!isLoggedIn) {
+      return;
+    }
+
+    final isExpired = await StorageService().isSessionExpired(_sessionTimeout);
+    if (isExpired) {
+      await _logoutToWelcome();
+      return;
+    }
+
+    await _saveLastActiveTimestamp();
+  }
+
+  Future<void> _handleAppResumed() async {
+    final isLoggedIn = await StorageService().isLoggedIn();
+    if (!isLoggedIn) {
+      return;
+    }
+
+    final isExpired = await StorageService().isSessionExpired(_sessionTimeout);
+    if (isExpired) {
+      await _logoutToWelcome();
+      return;
+    }
+
+    await _saveLastActiveTimestamp();
+  }
+
+  Future<void> _saveLastActiveTimestamp() async {
+    final isLoggedIn = await StorageService().isLoggedIn();
+    if (!isLoggedIn) {
+      return;
+    }
+
+    await StorageService().saveLastActiveAt(DateTime.now());
+  }
+
+  Future<void> _logoutToWelcome() async {
+    await StorageService().logout();
+    ApiService().clearAuthToken();
+
+    final navigator = _navigatorKey.currentState;
+    if (navigator != null) {
+      navigator.pushNamedAndRemoveUntil('/welcome', (route) => false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'AminoRice',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -27,6 +111,11 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      routes: {
+        '/welcome': (context) => const HomePage(),
+        '/login': (context) => const LoginPage(),
+        '/main': (context) => const MainNavBar(),
+      },
       home: const HomePage(),
     );
   }
@@ -56,13 +145,11 @@ class _HomePageState extends State<HomePage> {
         if (token != null) {
           // Set token in API service
           ApiService().setAuthToken(token);
+          await StorageService().saveLastActiveAt(DateTime.now());
 
           // Navigate to main app
           if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const MainNavBar()),
-            );
+            Navigator.pushReplacementNamed(context, '/main');
             return;
           }
         }
@@ -320,12 +407,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     child: ElevatedButton(
                       onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const LoginPage(),
-                          ),
-                        );
+                        Navigator.pushNamed(context, '/login');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,

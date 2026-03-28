@@ -2,13 +2,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'login.dart';
 import '../widgets/main_navbar.dart';
 import 'history.dart';
 import 'chatbot.dart';
 import 'profile.dart';
 import '../services/api_service.dart';
 import '../models/scan_result.dart';
+import '../utils/logout_helper.dart';
 
 class RecordPage extends StatefulWidget {
   const RecordPage({super.key});
@@ -886,12 +886,9 @@ class _RecordPageState extends State<RecordPage> {
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const LoginPage()),
-                  (route) => false,
-                );
+                await logoutAndNavigateToWelcome(this.context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
@@ -912,222 +909,151 @@ class _RecordPageState extends State<RecordPage> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (BuildContext context) {
-        // Determine quality color
-        Color qualityColor = _getQualityColor(
-          result.conclusion.overallQualityCategory,
-        );
+      builder: (_) => _ScanResultPopup(result: result),
+    );
+  }
+}
 
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Container(
-            constraints: const BoxConstraints(maxHeight: 700, maxWidth: 500),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFF2E7D32),
-                        const Color(0xFF66BB6A),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(20),
-                      topRight: Radius.circular(20),
-                    ),
+class _ScanResultPopup extends StatefulWidget {
+  const _ScanResultPopup({required this.result});
+
+  final ScanResult result;
+
+  @override
+  State<_ScanResultPopup> createState() => _ScanResultPopupState();
+}
+
+class _ScanResultPopupState extends State<_ScanResultPopup>
+    with SingleTickerProviderStateMixin {
+  static const Color _primaryGreen = Color(0xFF2E7D32);
+  static const Color _secondaryGreen = Color(0xFF66BB6A);
+  static const Color _softBg = Color(0xFFF4FBF5);
+
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    )..forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final result = widget.result;
+    final qualityColor = _getQualityColor(
+      widget.result.conclusion.overallQualityCategory,
+    );
+    final totalGrains = widget.result.grainCharacteristics.totalGrains;
+    final brokenGrains = widget.result.grainCharacteristics.brokenGrains;
+    final longGrains = widget.result.grainCharacteristics.longGrains;
+    final mediumGrains = widget.result.grainCharacteristics.mediumGrains;
+    final defects = <String, double>{
+      'Black': widget.result.defectiveGrains.blackGrains,
+      'Chalky': widget.result.defectiveGrains.chalkyGrains,
+      'Red': widget.result.defectiveGrains.redGrains,
+      'Yellow': widget.result.defectiveGrains.yellowGrains,
+      'Green': widget.result.defectiveGrains.greenGrains,
+    };
+
+    final totalDefects = widget.result.defectiveGrains.totalDefective;
+    final brokenPct = totalGrains > 0
+        ? (brokenGrains / totalGrains) * 100
+        : widget.result.conclusion.brokenGrainPercentage;
+    final defectPct = totalGrains > 0
+        ? (totalDefects / totalGrains) * 100
+        : widget.result.conclusion.defectiveGrainPercentage;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
+      backgroundColor: Colors.transparent,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.88,
+          maxWidth: 470,
+        ),
+        decoration: BoxDecoration(
+          color: _softBg,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: _secondaryGreen.withOpacity(0.25)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.18),
+              blurRadius: 24,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            _Reveal(
+              animation: _animationFor(0),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_primaryGreen, _secondaryGreen],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: Column(
-                    children: [
-                      const Icon(
-                        Icons.assessment,
-                        size: 50,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        'Analysis Results',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        'Sample ID: ${result.sampleInformation.sampleId}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.white70,
-                        ),
-                      ),
-                    ],
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
                   ),
                 ),
-
-                // Scrollable Content
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        // Grain Characteristics
-                        _buildSectionTitle('Grain Characteristics'),
-                        const SizedBox(height: 10),
-                        _buildInfoCard([
-                          _buildInfoRow(
-                            'Total Grains',
-                            '${result.grainCharacteristics.totalGrains.toStringAsFixed(0)}',
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        const Expanded(
+                          child: Text(
+                            'Scan results',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
-                          _buildInfoRow(
-                            'Broken Grains',
-                            '${result.grainCharacteristics.brokenGrains.toStringAsFixed(0)}',
-                          ),
-                          _buildInfoRow(
-                            'Long Grains',
-                            '${result.grainCharacteristics.longGrains.toStringAsFixed(0)}',
-                          ),
-                          _buildInfoRow(
-                            'Medium Grains',
-                            '${result.grainCharacteristics.mediumGrains.toStringAsFixed(0)}',
-                          ),
-                        ]),
-                        const SizedBox(height: 16),
-
-                        // Defective Grains
-                        _buildSectionTitle('Defective Grains'),
-                        const SizedBox(height: 10),
-                        _buildInfoCard([
-                          _buildInfoRow(
-                            'Black Grains',
-                            '${result.defectiveGrains.blackGrains.toStringAsFixed(0)}',
-                          ),
-                          _buildInfoRow(
-                            'Chalky Grains',
-                            '${result.defectiveGrains.chalkyGrains.toStringAsFixed(0)}',
-                          ),
-                          _buildInfoRow(
-                            'Red Grains',
-                            '${result.defectiveGrains.redGrains.toStringAsFixed(0)}',
-                          ),
-                          _buildInfoRow(
-                            'Yellow Grains',
-                            '${result.defectiveGrains.yellowGrains.toStringAsFixed(0)}',
-                          ),
-                          _buildInfoRow(
-                            'Green Grains',
-                            '${result.defectiveGrains.greenGrains.toStringAsFixed(0)}',
-                          ),
-                          _buildInfoRow(
-                            'Total Defective',
-                            '${result.defectiveGrains.totalDefective.toStringAsFixed(0)}',
-                            isBold: true,
-                          ),
-                        ]),
-                        const SizedBox(height: 16),
-
-                        // Grain Measurements
-                        _buildSectionTitle('Grain Measurements'),
-                        const SizedBox(height: 10),
-                        _buildInfoCard([
-                          _buildInfoRow(
-                            'Average Length',
-                            '${result.grainMeasurements.averageLength.toStringAsFixed(3)} mm',
-                          ),
-                          _buildInfoRow(
-                            'Average Width',
-                            '${result.grainMeasurements.averageWidth.toStringAsFixed(3)} mm',
-                          ),
-                          _buildInfoRow(
-                            'Length/Width Ratio',
-                            '${result.grainMeasurements.lengthWidthRatio.toStringAsFixed(3)}',
-                          ),
-                        ]),
-                        const SizedBox(height: 16),
-
-                        // Color Characteristics
-                        _buildSectionTitle('Color Characteristics (LAB)'),
-                        const SizedBox(height: 10),
-                        _buildInfoCard([
-                          _buildInfoRow(
-                            'L (Lightness)',
-                            '${result.colorCharacteristics.averageL.toStringAsFixed(2)}',
-                          ),
-                          _buildInfoRow(
-                            'a (Green-Red)',
-                            '${result.colorCharacteristics.averageA.toStringAsFixed(2)}',
-                          ),
-                          _buildInfoRow(
-                            'b (Blue-Yellow)',
-                            '${result.colorCharacteristics.averageB.toStringAsFixed(2)}',
-                          ),
-                        ]),
-                        const SizedBox(height: 20),
-
-                        // Conclusion Box
+                        ),
                         Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: qualityColor.withOpacity(0.1),
-                            border: Border.all(color: qualityColor, width: 2),
-                            borderRadius: BorderRadius.circular(12),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                'Conclusion',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
                                   color: qualityColor,
+                                  shape: BoxShape.circle,
                                 ),
                               ),
-                              const SizedBox(height: 12),
-                              Text(
-                                'Rice has ${result.conclusion.brokenGrainPercentage.toStringAsFixed(2)}% broken grains, ${result.conclusion.defectiveGrainPercentage.toStringAsFixed(2)}% chalky/defective grains.',
+                              const SizedBox(width: 6),
+                              const Text(
+                                'Complete',
                                 style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[800],
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  const Text(
-                                    'Result: ',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                  Text(
-                                    result.conclusion.overallQualityCategory,
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: qualityColor,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                result.conclusion.qualityDescription,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey[700],
-                                  fontStyle: FontStyle.italic,
+                                  color: Colors.white,
+                                  fontSize: 11,
                                 ),
                               ),
                             ],
@@ -1135,106 +1061,596 @@ class _RecordPageState extends State<RecordPage> {
                         ),
                       ],
                     ),
-                  ),
-                ),
-
-                // Action Buttons
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF2E7D32),
-                            side: const BorderSide(color: Color(0xFF2E7D32)),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text('Close'),
-                        ),
+                    const SizedBox(height: 8),
+                    Text(
+                      result.conclusion.overallQualityCategory,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const HistoryPage(),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      result.conclusion.qualityDescription,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 12,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        _scorePill(
+                          '${brokenPct.toStringAsFixed(1)}%',
+                          'Broken',
+                        ),
+                        const SizedBox(width: 8),
+                        _scorePill(
+                          '${defectPct.toStringAsFixed(1)}%',
+                          'Defective',
+                        ),
+                        const SizedBox(width: 8),
+                        _scorePill(_formatCount(totalGrains), 'Total'),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _Reveal(
+                      animation: _animationFor(1),
+                      child: const _SectionLabel('Grain count breakdown'),
+                    ),
+                    const SizedBox(height: 8),
+                    _Reveal(
+                      animation: _animationFor(2),
+                      child: GridView.count(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        childAspectRatio: 1.42,
+                        children: [
+                          _metricCard(
+                            label: 'Total count',
+                            value: _formatCount(totalGrains),
+                            subtitle: 'grains detected',
+                            progress: 1,
+                            progressColor: _secondaryGreen,
+                          ),
+                          _metricCard(
+                            label: 'Broken',
+                            value: _formatCount(brokenGrains),
+                            subtitle:
+                                '${brokenPct.toStringAsFixed(1)}% of total',
+                            progress: (brokenPct / 100)
+                                .clamp(0.0, 1.0)
+                                .toDouble(),
+                            progressColor: const Color(0xFFD84343),
+                          ),
+                          _metricCard(
+                            label: 'Long grains',
+                            value: _formatCount(longGrains),
+                            subtitle:
+                                '${_safePercentage(longGrains, totalGrains).toStringAsFixed(1)}% of total',
+                            progress:
+                                (totalGrains > 0 ? longGrains / totalGrains : 0)
+                                    .clamp(0.0, 1.0)
+                                    .toDouble(),
+                            progressColor: _primaryGreen,
+                          ),
+                          _metricCard(
+                            label: 'Medium grains',
+                            value: _formatCount(mediumGrains),
+                            subtitle:
+                                '${_safePercentage(mediumGrains, totalGrains).toStringAsFixed(1)}% of total',
+                            progress:
+                                (totalGrains > 0
+                                        ? mediumGrains / totalGrains
+                                        : 0)
+                                    .clamp(0.0, 1.0)
+                                    .toDouble(),
+                            progressColor: const Color(0xFF8EBF61),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _Reveal(
+                      animation: _animationFor(3),
+                      child: const _SectionLabel('Defective grains'),
+                    ),
+                    const SizedBox(height: 8),
+                    _Reveal(
+                      animation: _animationFor(4),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: _cardDecoration(),
+                        child: Column(
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Defect analysis',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1B4332),
+                                  ),
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE9F7EA),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '${_formatCount(totalDefects)} defective',
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: _primaryGreen,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            ...defects.entries.map(
+                              (entry) => Padding(
+                                padding: const EdgeInsets.only(bottom: 9),
+                                child: _defectRow(
+                                  name: entry.key,
+                                  count: entry.value,
+                                  totalGrains: totalGrains,
+                                  totalDefects: totalDefects,
+                                ),
                               ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2E7D32),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
                             ),
-                          ),
-                          child: const Text('View History'),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 12),
+                    _Reveal(
+                      animation: _animationFor(5),
+                      child: const _SectionLabel('Grain measurements'),
+                    ),
+                    const SizedBox(height: 8),
+                    _Reveal(
+                      animation: _animationFor(6),
+                      child: Container(
+                        decoration: _cardDecoration(),
+                        child: Column(
+                          children: [
+                            _measureRow(
+                              'Average length',
+                              result.grainMeasurements.averageLength
+                                  .toStringAsFixed(3),
+                              'mm',
+                            ),
+                            _measureRow(
+                              'Average width',
+                              result.grainMeasurements.averageWidth
+                                  .toStringAsFixed(3),
+                              'mm',
+                            ),
+                            _measureRow(
+                              'Length / width ratio',
+                              result.grainMeasurements.lengthWidthRatio
+                                  .toStringAsFixed(3),
+                              'ratio',
+                              isLast: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _Reveal(
+                      animation: _animationFor(7),
+                      child: const _SectionLabel('Color analysis (CIE Lab)'),
+                    ),
+                    const SizedBox(height: 8),
+                    _Reveal(
+                      animation: _animationFor(8),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: _cardDecoration(),
+                        child: Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    height: 42,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: _riceSwatchColor(
+                                        result.colorCharacteristics.averageL,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      _resolveRiceType(
+                                        result.colorCharacteristics.averageL,
+                                      ),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF374151),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  flex: 2,
+                                  child: Container(
+                                    height: 42,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFE8F3EA),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Text(
+                                          'Brightness',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Color(0xFF43614C),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: TweenAnimationBuilder<double>(
+                                            tween: Tween<double>(
+                                              begin: 0,
+                                              end:
+                                                  (result
+                                                              .colorCharacteristics
+                                                              .averageL /
+                                                          100)
+                                                      .clamp(0.0, 1.0)
+                                                      .toDouble(),
+                                            ),
+                                            duration: const Duration(
+                                              milliseconds: 900,
+                                            ),
+                                            curve: Curves.easeOutCubic,
+                                            builder: (context, value, child) {
+                                              return ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
+                                                child: LinearProgressIndicator(
+                                                  value: value,
+                                                  minHeight: 6,
+                                                  backgroundColor: const Color(
+                                                    0xFFCAE5CF,
+                                                  ),
+                                                  color: _primaryGreen,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                _cieBox(
+                                  'L*',
+                                  result.colorCharacteristics.averageL,
+                                ),
+                                const SizedBox(width: 6),
+                                _cieBox(
+                                  'a*',
+                                  result.colorCharacteristics.averageA,
+                                ),
+                                const SizedBox(width: 6),
+                                _cieBox(
+                                  'b*',
+                                  result.colorCharacteristics.averageB,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+            ),
+            _Reveal(
+              animation: _animationFor(9),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ChatbotScreen(),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _primaryGreen,
+                          side: const BorderSide(color: _primaryGreen),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('Ask AI'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const HistoryPage(),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _primaryGreen,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text('View History'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Animation<double> _animationFor(int index) {
+    final start = (index * 0.08).clamp(0.0, 0.8).toDouble();
+    final end = (start + 0.2).clamp(0.0, 1.0).toDouble();
+    return CurvedAnimation(
+      parent: _controller,
+      curve: Interval(start, end, curve: Curves.easeOutCubic),
+    );
+  }
+
+  Widget _scorePill(String value, String label) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.65),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _metricCard({
+    required String label,
+    required String value,
+    required String subtitle,
+    required double progress,
+    required Color progressColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF111827),
             ),
           ),
-        );
-      },
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: Color(0xFF2E7D32),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+          ),
+          const Spacer(),
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: progress),
+            duration: const Duration(milliseconds: 900),
+            curve: Curves.easeOutCubic,
+            builder: (context, value, child) {
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: LinearProgressIndicator(
+                  value: value,
+                  minHeight: 4,
+                  backgroundColor: const Color(0xFFDDEBDF),
+                  color: progressColor,
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildInfoCard(List<Widget> children) {
+  Widget _defectRow({
+    required String name,
+    required double count,
+    required double totalGrains,
+    required double totalDefects,
+  }) {
+    final defectColor = _defectColor(name);
+    final pctOfTotal = _safePercentage(count, totalGrains);
+    final pctOfDefects = totalDefects > 0 ? count / totalDefects : 0;
+
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: defectColor, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            name,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
+          ),
+        ),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(
+                begin: 0,
+                end: pctOfDefects.clamp(0.0, 1.0).toDouble(),
+              ),
+              duration: const Duration(milliseconds: 850),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return LinearProgressIndicator(
+                  value: value,
+                  minHeight: 5,
+                  backgroundColor: const Color(0xFFDDEBDF),
+                  color: defectColor,
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 36,
+          child: Text(
+            _formatCount(count),
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF111827),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 42,
+          child: Text(
+            '${pctOfTotal.toStringAsFixed(1)}%',
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _measureRow(
+    String title,
+    String value,
+    String unit, {
+    bool isLast = false,
+  }) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey[300]!),
+        border: isLast
+            ? null
+            : const Border(
+                bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.7),
+              ),
       ),
-      child: Column(children: children),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value, {bool isBold = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: Colors.grey[700],
-              fontWeight: isBold ? FontWeight.w600 : FontWeight.normal,
-            ),
+            title,
+            style: const TextStyle(fontSize: 13, color: Color(0xFF4B5563)),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-              color: Colors.black87,
+          RichText(
+            text: TextSpan(
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827),
+              ),
+              children: [
+                TextSpan(text: value),
+                TextSpan(
+                  text: ' $unit',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -1242,19 +1658,149 @@ class _RecordPageState extends State<RecordPage> {
     );
   }
 
+  Widget _cieBox(String label, double value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: Color(0xFF6B7280)),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value.toStringAsFixed(1),
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  BoxDecoration _cardDecoration() {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFD6E8D8), width: 0.9),
+    );
+  }
+
+  double _safePercentage(double value, double total) {
+    if (total <= 0) {
+      return 0;
+    }
+    return (value / total) * 100;
+  }
+
+  String _formatCount(double value) {
+    return value.toStringAsFixed(0);
+  }
+
   Color _getQualityColor(String quality) {
     final lowerQuality = quality.toLowerCase();
     if (lowerQuality.contains('premium')) {
-      return Colors.green[700]!;
-    } else if (lowerQuality.contains('good')) {
-      return Colors.green;
-    } else if (lowerQuality.contains('medium')) {
-      return Colors.orange;
-    } else if (lowerQuality.contains('fair')) {
-      return Colors.orange[800]!;
-    } else if (lowerQuality.contains('poor')) {
-      return Colors.red;
+      return const Color(0xFF1B8F4F);
     }
-    return Colors.grey;
+    if (lowerQuality.contains('good')) {
+      return const Color(0xFF2E7D32);
+    }
+    if (lowerQuality.contains('medium') || lowerQuality.contains('fair')) {
+      return const Color(0xFFE09F2D);
+    }
+    if (lowerQuality.contains('poor')) {
+      return const Color(0xFFC8473D);
+    }
+    return _secondaryGreen;
+  }
+
+  String _resolveRiceType(double lightness) {
+    if (lightness > 75) {
+      return 'White rice';
+    }
+    if (lightness > 65) {
+      return 'Brown rice';
+    }
+    return 'Paddy rice';
+  }
+
+  Color _riceSwatchColor(double lightness) {
+    if (lightness > 75) {
+      return const Color(0xFFF5F0DC);
+    }
+    if (lightness > 65) {
+      return const Color(0xFFD2B991);
+    }
+    return const Color(0xFFA58250);
+  }
+
+  Color _defectColor(String defectName) {
+    switch (defectName.toLowerCase()) {
+      case 'black':
+        return const Color(0xFF2F4F37);
+      case 'chalky':
+        return const Color(0xFF9DB9A1);
+      case 'red':
+        return const Color(0xFFC8473D);
+      case 'yellow':
+        return const Color(0xFFD1A235);
+      case 'green':
+        return const Color(0xFF4B9F68);
+      default:
+        return _secondaryGreen;
+    }
+  }
+}
+
+class _Reveal extends StatelessWidget {
+  const _Reveal({required this.animation, required this.child});
+
+  final Animation<double> animation;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      child: child,
+      builder: (context, child) {
+        final eased = Curves.easeOutCubic.transform(animation.value);
+        return Opacity(
+          opacity: eased,
+          child: Transform.translate(
+            offset: Offset(0, (1 - eased) * 14),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.9,
+        color: Color(0xFF6B7280),
+      ),
+    );
   }
 }

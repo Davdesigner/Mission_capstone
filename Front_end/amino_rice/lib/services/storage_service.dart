@@ -6,6 +6,7 @@ class StorageService {
   static const String _keyAuthToken = 'auth_token';
   static const String _keyUserData = 'user_data';
   static const String _keyIsLoggedIn = 'is_logged_in';
+  static const String _keyLastActiveAt = 'last_active_at';
 
   // Singleton pattern
   static final StorageService _instance = StorageService._internal();
@@ -71,6 +72,34 @@ class StorageService {
     await init();
     await _prefs!.remove(_keyAuthToken);
     await _prefs!.remove(_keyUserData);
+    await _prefs!.remove(_keyLastActiveAt);
     await _prefs!.setBool(_keyIsLoggedIn, false);
+  }
+
+  Future<bool> saveLastActiveAt(DateTime timestamp) async {
+    await init();
+    return await _prefs!.setInt(
+      _keyLastActiveAt,
+      timestamp.millisecondsSinceEpoch,
+    );
+  }
+
+  Future<DateTime?> getLastActiveAt() async {
+    await init();
+    final millis = _prefs!.getInt(_keyLastActiveAt);
+    if (millis == null) {
+      return null;
+    }
+
+    return DateTime.fromMillisecondsSinceEpoch(millis);
+  }
+
+  Future<bool> isSessionExpired(Duration timeout) async {
+    final lastActiveAt = await getLastActiveAt();
+    if (lastActiveAt == null) {
+      return false;
+    }
+
+    return DateTime.now().difference(lastActiveAt) > timeout;
   }
 }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../widgets/main_navbar.dart';
 import '../services/api_service.dart';
-import 'login.dart';
 import 'scanning.dart';
 import 'history.dart';
 import 'profile.dart';
+import '../utils/logout_helper.dart';
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -711,12 +711,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const LoginPage()),
-                  (route) => false,
-                );
+                await logoutAndNavigateToWelcome(this.context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

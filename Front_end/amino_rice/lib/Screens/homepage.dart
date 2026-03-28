@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'login.dart';
 import 'scanning.dart';
 import 'history.dart';
 import 'chatbot.dart';
 import 'profile.dart';
+import '../utils/logout_helper.dart';
 
 /// Home screen for AminoRice - Rice Quality Assurance Application
 class HomeScreen extends StatefulWidget {
@@ -1093,12 +1093,9 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.of(context).pop();
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const LoginPage()),
-                  (route) => false,
-                );
+                await logoutAndNavigateToWelcome(this.context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

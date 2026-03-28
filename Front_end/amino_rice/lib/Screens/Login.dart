@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import '../widgets/main_navbar.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 import 'register.dart';
-import '../main.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -57,11 +55,9 @@ class _LoginPageState extends State<LoginPage> {
                                 size: 28,
                               ),
                               onPressed: () {
-                                Navigator.pushReplacement(
+                                Navigator.pushReplacementNamed(
                                   context,
-                                  MaterialPageRoute(
-                                    builder: (context) => const HomePage(),
-                                  ),
+                                  '/welcome',
                                 );
                               },
                             ),
@@ -347,6 +343,7 @@ class _LoginPageState extends State<LoginPage> {
         // Save auth token
         await StorageService().saveAuthToken(result['access_token']);
         await StorageService().setLoggedIn(true);
+        await StorageService().saveLastActiveAt(DateTime.now());
 
         // Get user profile
         final user = await ApiService().getProfile();
@@ -376,10 +373,7 @@ class _LoginPageState extends State<LoginPage> {
           );
 
           // Navigate to home (with bottom nav bar)
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const MainNavBar()),
-          );
+          Navigator.pushReplacementNamed(context, '/main');
         }
       }
     } catch (e) {
