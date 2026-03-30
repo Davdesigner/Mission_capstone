@@ -29,7 +29,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 import os, math
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps, UnidentifiedImageError
 import io
 import onnxruntime as ort
 import cloudinary
@@ -67,6 +67,8 @@ GDRIVE_ONNX_ID  = os.getenv("GDRIVE_ONNX_ID", "")
 
 IMG_H = 640
 IMG_W = 640
+MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", 15 * 1024 * 1024))
+MAX_IMAGE_PIXELS = int(os.getenv("MAX_IMAGE_PIXELS", 40_000_000))
 
 # ── Target order (must match training script exactly) ─────────────────────────
 COUNT_TARGETS = [
@@ -470,14 +472,52 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 #  IMAGE HELPERS
 # =============================================================================
 
-def preprocess_image(image_bytes: bytes) -> np.ndarray:
+def load_image_for_model(image_bytes: bytes) -> Image.Image:
+    """Decode and validate uploaded image bytes for safe model preprocessing."""
+    if not image_bytes:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Uploaded file is empty")
+    if len(image_bytes) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            f"Image file is too large. Max allowed is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB",
+        )
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            img = ImageOps.exif_transpose(img)
+            img.load()
+            if img.width * img.height > MAX_IMAGE_PIXELS:
+                raise HTTPException(
+                    status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    "Image resolution is too large. Please upload a smaller image.",
+                )
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            return img.copy()
+    except HTTPException:
+        raise
+    except Image.DecompressionBombError:
+        raise HTTPException(
+            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            "Image resolution is too large and unsafe to process.",
+        )
+    except UnidentifiedImageError:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Unsupported or invalid image format. Try JPG, PNG, WEBP, BMP, or TIFF.",
+        )
+    except OSError:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Image file appears corrupted or unreadable.",
+        )
+
+
+def preprocess_image(img: Image.Image) -> np.ndarray:
     """
     Resize to 640×640, ImageNet normalise, return float32 [1,3,640,640].
     Matches the training val_transform pipeline exactly.
     """
-    img = Image.open(io.BytesIO(image_bytes))
-    if img.mode != "RGB":
-        img = img.convert("RGB")
     img       = img.resize((IMG_W, IMG_H), Image.BILINEAR)
     arr       = np.array(img, dtype=np.float32) / 255.0
     mean      = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -488,9 +528,9 @@ def preprocess_image(image_bytes: bytes) -> np.ndarray:
     return arr
 
 
-def detect_comment_from_image(image_bytes: bytes) -> int:
+def detect_comment_from_image(img: Image.Image) -> int:
     """Estimate rice type from image brightness (heuristic)."""
-    gray       = Image.open(io.BytesIO(image_bytes)).convert("L")
+    gray       = img.convert("L")
     brightness = np.array(gray, dtype=np.float32).mean()
     if brightness < 80:  return 0   # Paddy (dark)
     if brightness < 160: return 1   # Brown (mid)
@@ -640,7 +680,7 @@ async def predict_rice_quality(
     """
     Predict rice quality from an uploaded image.
 
-    - **file**: JPEG or PNG image of rice grains.
+        - **file**: Image file of rice grains (JPG, PNG, WEBP, BMP, TIFF, etc.).
     - **comment_hint** (optional): Rice type — 0=Paddy, 1=Brown, 2=White.
       If omitted the API estimates from image brightness.
     """
@@ -648,12 +688,13 @@ async def predict_rice_quality(
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
                             "Prediction model is not loaded")
 
-    if not file.content_type.startswith("image/"):
+    if file.content_type and (not file.content_type.startswith("image/")):
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            "File must be an image (JPEG or PNG)")
+                            "File must be an image")
 
     try:
         image_bytes = await file.read()
+        decoded_img = load_image_for_model(image_bytes)
 
         # ── 1. Upload to Cloudinary ───────────────────────────────────────────
         image_url = await upload_to_cloudinary(
@@ -664,11 +705,11 @@ async def predict_rice_quality(
         comment_idx = (
             comment_hint
             if comment_hint is not None and comment_hint in (0, 1, 2)
-            else detect_comment_from_image(image_bytes)
+            else detect_comment_from_image(decoded_img)
         )
 
         # ── 3. Preprocess image ───────────────────────────────────────────────
-        image_array = preprocess_image(image_bytes)         # [1, 3, 640, 640]
+        image_array = preprocess_image(decoded_img)         # [1, 3, 640, 640]
 
         # ── 4. ONNX inference ─────────────────────────────────────────────────
         raw_output = run_onnx_inference(image_array, comment_idx)   # [16] z-scored
