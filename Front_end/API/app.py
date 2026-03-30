@@ -517,19 +517,19 @@ def classify_rice_quality(broken_pct: float, defect_pct: float) -> tuple:
     Classifies quality based on broken grain % and defective grain %.
     Thresholds aligned with international rice grading standards.
     """
-    if broken_pct < 5 and defect_pct < 3:
+    if broken_pct < 5 or defect_pct < 3:
         return ("Premium Quality",
                 "Broken grains below 5%. Very low defects. "
                 "Uniform grain size and colour. Excellent for premium markets.")
-    elif broken_pct < 15 and defect_pct < 8:
+    elif broken_pct < 15 or defect_pct < 8:
         return ("Good Quality",
                 "Broken grains 5–15%. Low defective grains. "
                 "Good quality suitable for standard markets.")
-    elif broken_pct < 25 and defect_pct < 15:
+    elif broken_pct < 25 or defect_pct < 15:
         return ("Medium Quality",
                 "Broken grains 15–25%. Moderate defects. "
                 "Acceptable for general consumption.")
-    elif broken_pct < 35 and defect_pct < 25:
+    elif broken_pct < 35 or defect_pct < 25:
         return ("Fair Quality",
                 "Broken grains 25–35%. High defects. Lower grade quality.")
     else:
