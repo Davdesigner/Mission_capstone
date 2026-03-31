@@ -29,6 +29,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 import os, math
 import numpy as np
+import gc
 from PIL import Image, ImageOps, UnidentifiedImageError
 import io
 import onnxruntime as ort
@@ -273,6 +274,13 @@ def _file_size_mb(path: str) -> float:
     except: return 0.0
 
 
+def is_model_valid(path: str, min_size_mb: float = 50.0) -> bool:
+    """Return True only when the model file exists and looks complete."""
+    if not os.path.exists(path):
+        return False
+    return _file_size_mb(path) >= min_size_mb
+
+
 def ensure_model_file(local_path: str, gdrive_id: str, label: str) -> bool:
     if os.path.exists(local_path):
         print(f"  ✅ {label} present ({_file_size_mb(local_path):.1f} MB)")
@@ -317,15 +325,26 @@ async def startup():
         print(f"❌ MongoDB error: {e}")
 
     # Model file
-    ensure_model_file(ONNX_MODEL_PATH, GDRIVE_ONNX_ID, "Final_Best_model.onnx")
+    if not is_model_valid(ONNX_MODEL_PATH):
+        ensure_model_file(ONNX_MODEL_PATH, GDRIVE_ONNX_ID, "Final_Best_model.onnx")
+    else:
+        print(f"  ✅ Model already present, skipping download ({_file_size_mb(ONNX_MODEL_PATH):.1f} MB)")
 
     # ONNX session
     if os.path.exists(ONNX_MODEL_PATH):
         try:
-            providers = (["CUDAExecutionProvider", "CPUExecutionProvider"]
-                         if "CUDAExecutionProvider" in ort.get_available_providers()
-                         else ["CPUExecutionProvider"])
-            onnx_session = ort.InferenceSession(ONNX_MODEL_PATH, providers=providers)
+            sess_options = ort.SessionOptions()
+            sess_options.intra_op_num_threads = 1
+            sess_options.inter_op_num_threads = 1
+            sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+
+            providers = ["CPUExecutionProvider"]
+            onnx_session = ort.InferenceSession(
+                ONNX_MODEL_PATH,
+                sess_options=sess_options,
+                providers=providers,
+            )
             for inp in onnx_session.get_inputs():
                 print(f"  Input  '{inp.name}' {inp.shape} {inp.type}")
             for out in onnx_session.get_outputs():
@@ -700,6 +719,7 @@ async def predict_rice_quality(
         image_url = await upload_to_cloudinary(
             image_bytes, file.filename or "rice_scan.png"
         )
+        del image_bytes
 
         # ── 2. Determine rice type hint ───────────────────────────────────────
         comment_idx = (
@@ -710,14 +730,18 @@ async def predict_rice_quality(
 
         # ── 3. Preprocess image ───────────────────────────────────────────────
         image_array = preprocess_image(decoded_img)         # [1, 3, 640, 640]
+        del decoded_img
 
         # ── 4. ONNX inference ─────────────────────────────────────────────────
         raw_output = run_onnx_inference(image_array, comment_idx)   # [16] z-scored
+        del image_array
+        gc.collect()
 
         # ── 5. INVERSE TRANSFORM — THE CRITICAL FIX ───────────────────────────
         # raw_output contains z-scored/log-transformed values, NOT real counts.
         # inverse_transform() converts them back to real grain counts and mm values.
         preds            = inverse_transform(raw_output)
+        del raw_output
         transform_applied = not preds.pop('_transform_warning', False)
 
         # ── 6. Ensure non-negative counts (safety clamp) ──────────────────────
